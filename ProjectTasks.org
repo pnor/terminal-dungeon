@@ -1,0 +1,76 @@
+* TODOs og the game
+** [0%] First Steps
+*** [0%] Single Room
+**** The how to
+How to represent the world?
+*Camera* should take in/own
+- world/map
+- entities
+- top layer info (darkness)
+and it handles the sorting to draw stuff
+
+*World/map handles*
+- big matrix of wall vs floor vs effect tiles vs etc.
+(can make it from tilemap)
+
+*Entities*
+- vector of entity structs
+
+*Particles*
+- ? tod
+  :END:
+
+** Map
+   :PROPERTIES:
+   :CUSTOM_ID: map
+   :END:
+
+Tilemap file -> Game Map
+
+** World
+   :PROPERTIES:
+   :CUSTOM_ID: world
+   :END:
+
+The parts of the world, which is used to draw
+Ordered from "lowest" to "highest": (map is at bottom of stack)
+
+- Map 🌎 - from the tilemap
+
+- Entities (player, enemies, items) - hashmapped
+
+- Top Layer (darkness shroud, transparent clouds) - darkness is opaque,
+and stops ray - transparent effects would be for style, and should be
+disabled on non true color terminals
+
+- Particle effects - nother layer
+
+- Camera 👁
+
+** Camera
+   :PROPERTIES:
+   :CUSTOM_ID: camera
+   :END:
+
+World * Position -> String of what to show
+
+Use ray tracing strategy: for each pixel in view, shoot a "ray" and draw
+the character it first hits
+
+See [[file:~/Documents/Classes Related/CS 4620/assignment/assignment5/ray.py::def render_image(camera, scene, lights, nx, ny):][the ray tracer]] for an example of params of a camera
+
+** Entities
+   :PROPERTIES:
+   :CUSTOM_ID: entities
+   :END:
+
+Main ones include:
+- Player
+- Enemy
+- Spawn
+- point
+- Wall
+- Locked
+- Doors
+- Keys
+- Items
