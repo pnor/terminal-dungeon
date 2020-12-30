@@ -1,4 +1,5 @@
 mod world;
+mod entities;
 
 use cursive::Cursive;
 use cursive::theme::*;
@@ -6,10 +7,41 @@ use cursive::traits::*;
 use cursive::utils::markup::StyledString;
 use cursive::views::*;
 
+use specs::{Builder, Component, DispatcherBuilder,
+            VecStorage, World, WorldExt};
+
 use world::map;
 
+use entities::{entity, component, text_render_system, factory};
+use component::{Position, Appearance};
+use text_render_system::TextRenderSystem;
+
 fn main() {
-    println!("{}", draw_room());
+    demo_ecs();
+}
+
+fn demo_ecs() {
+    let mut world = World::new();
+
+    // Register Components
+    world.register::<Position>();
+    world.register::<Appearance>();
+
+    // Add resources
+    let mut map = map::test_room();
+    world.insert(map);
+
+    // Make a player
+    let player = factory::make_player(&mut world);
+
+    // Setup Dispatch
+    let mut dispatcher = DispatcherBuilder::new()
+        .with(TextRenderSystem, "text_render_system", &[])
+        .build();
+
+    // Run world once
+    dispatcher.dispatch(&mut world);
+    world.maintain();
 }
 
 fn draw_room() -> String {

@@ -1,6 +1,6 @@
 * TODOs og the game
 ** [0%] First Steps
-*** [0%] Single Room
+*** [50%] Single Room
 **** The how to
 How to represent the world?
 *Camera* should take in/own
@@ -17,7 +17,38 @@ and it handles the sorting to draw stuff
 - vector of entity structs
 
 *Particles*
-- ? tod
+- ? todo
+
+*How to draw*
+Ideally its nice and abstract; terminal does one way, GUIs do another
+Encode "way" as what *final rendering system* we deploy as a Thread local system
+The rendering process is a "unit"
+
+**** [X] Beginning of Game Map (to have a room)
+**** [X] Beginning of World (to draw)
+**** [ ] Beginning of Camera to render
+How to render?
+
+ 👁 \rightarrow top layers \rightarrow entities \rightarrow world
+
+For each entitiy, check if its in range
+
+if it is, shoot a ray through , and color the canvas
+
+
+**** [ ] Cursive View to render camera's image
+*** [ ] Player in room
+*** [ ] Player can move
+** TODO Basic movement
+** TODO Enemy
+** TODO Spells
+** TODO Map Generation
+** TODO Main UI
+** TODO menus and related
+
+* Details
+  :PROPERTIES:
+  :CUSTOM_ID: todos
   :END:
 
 ** Map
@@ -74,3 +105,14 @@ Main ones include:
 - Doors
 - Keys
 - Items
+
+
+Use an ECS lib? (yes!)
+https://github.com/amethyst/specs
+https://specs.amethyst.rs/docs/tutorials/01_intro.html <- great docs
+
+** Abstracting
+In order to really abstract out the logic from the how it looks, we need
+- backend (the game and ECS)
+- frontend (UI + input + rendering)
+  ... may be difficult to do it like that as animations and the like would have to be defined in 3D in order to specify a transformation down to 2D (lossy conversion better than trying to make 2D \rightarrow 3D)

@@ -1,8 +1,27 @@
-pub struct World {
+enum Tile {
+    Blank,
+    Wall
+}
+
+impl Clone for Tile {
+    fn clone(&self) -> Tile {
+        match self {
+            Self::Blank => Self::Blank,
+            Self::Wall => Self::Wall
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Map {
     tiles: Vec<Vec<Tile>>
 }
 
-impl World {
+impl Map {
+
+    pub fn tiles(&self) -> &Vec<Vec<Tile>> {
+        &self.tiles
+    }
 
     pub fn as_string(&self) -> String {
         if self.tiles.len() == 0 { return "".to_string(); }
@@ -31,21 +50,11 @@ impl World {
 
 }
 
-enum Tile {
-    Blank,
-    Wall
-}
+// impl Default for Map {
+//
+// }
 
-impl Clone for Tile {
-    fn clone(&self) -> Tile {
-        match self {
-            Self::Blank => Self::Blank,
-            Self::Wall => Self::Wall
-        }
-    }
-}
-
-pub fn test_room() -> World {
+pub fn test_room() -> Map {
     let mut tiles = vec![vec![Tile::Blank; 10]; 10];
 
     // Create 6x6 room in middle
@@ -86,5 +95,5 @@ pub fn test_room() -> World {
     tiles[2][4] = Tile::Wall;
     tiles[2][3] = Tile::Wall;
 
-    World { tiles: tiles }
+    Map { tiles }
 }
