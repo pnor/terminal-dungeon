@@ -1,6 +1,8 @@
 mod world;
 mod entities;
 
+use std::rc::Rc;
+
 use cursive::Cursive;
 use cursive::theme::*;
 use cursive::traits::*;
@@ -12,27 +14,31 @@ use specs::{Builder, Component, DispatcherBuilder,
 
 use world::map;
 
-use entities::{entity, component, text_render_system, factory};
+use entities::{entity, component, text_render_system, factory, text_canvas};
 use component::{Position, Appearance};
+use text_canvas::TextCanvas;
 use text_render_system::TextRenderSystem;
 
 fn main() {
-    demo_ecs();
+    setup_word();
 }
 
-fn demo_ecs() {
+fn setup_word() {
     let mut world = World::new();
+    world.insert(3);
 
     // Register Components
     world.register::<Position>();
     world.register::<Appearance>();
 
     // Add resources
-    let mut map = map::test_room();
+    let map = map::test_room();
     world.insert(map);
+    let canvas = text_canvas::create_canvas(20, 20);
+    world.insert(canvas);
 
     // Make a player
-    let player = factory::make_player(&mut world);
+    let _ = factory::make_player(&mut world);
 
     // Setup Dispatch
     let mut dispatcher = DispatcherBuilder::new()
@@ -42,11 +48,35 @@ fn demo_ecs() {
     // Run world once
     dispatcher.dispatch(&mut world);
     world.maintain();
+
+    // update display
+    let mutated_canvas = world.read_resource::<TextCanvas>();
+    draw_room(&mutated_canvas);
 }
 
-fn draw_room() -> String {
-    let room = map::test_room();
-    room.as_string()
+fn draw_room(canvas: &TextCanvas) {
+    let mut siv = cursive::default();
+
+    let (canvas_width, canvas_height) = canvas.dimensions();
+
+    let game_map_view =
+        LinearLayout::vertical()
+        .child(TextView::new(canvas.as_styled_string()))
+        .fixed_size((canvas_width, canvas_height));
+
+    siv.add_layer(
+        Layer::with_color(
+            LinearLayout::vertical()
+                .child(game_map_view)
+                .fixed_size((30, 30))
+            , ColorStyle::new(Color::Rgb(200, 200, 200), Color::Rgb(100, 100, 100))
+        )
+    );
+
+
+    siv.add_global_callback('q', |s| s.quit());
+
+    siv.run();
 }
 
 fn demo() {
