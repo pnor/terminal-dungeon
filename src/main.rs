@@ -1,6 +1,7 @@
 mod world;
 mod entities;
 
+use crate::PaletteColor::Background;
 use std::rc::Rc;
 
 use cursive::Cursive;
@@ -57,22 +58,53 @@ fn setup_word() {
 fn draw_room(canvas: &TextCanvas) {
     let mut siv = cursive::default();
 
+    let mut theme = siv.current_theme().clone();
+    theme.shadow = true;
+    // theme.palette[Background] = Color::Rgb(10, 10, 10);
+    siv.set_theme(theme);
+
     let (canvas_width, canvas_height) = canvas.dimensions();
 
+    let dont_care_color = Color::Rgb(0, 0, 0); // color i don't think will be seen
+
     let game_map_view =
+        Panel::new(
+            TextView::new(canvas.as_styled_string())
+                .fixed_size((canvas_width - 1, canvas_height - 1))
+            );
+
+    let main_view =
         LinearLayout::vertical()
-        .child(TextView::new(canvas.as_styled_string()))
-        .fixed_size((canvas_width, canvas_height));
+        .child(Canvas::new("").fixed_size((1, 2)))
+        .child(
+            ShadowView::new(
+                Panel::new(
+                    Layer::with_color(
+                        TextView::new("hello (:")
+                    , ColorStyle::new(dont_care_color.clone(), Color::Rgb(206, 206, 206)))
+                )
+            )
+        )
+        .child(Canvas::new("").fixed_size((1, 2)))
+        .child(
+            ShadowView::new(
+                game_map_view
+            ).left_padding(true)
+        )
+        .child(Canvas::new("").fixed_size((1, 2)));
+
+    let side_padding =
+        LinearLayout::horizontal()
+        .child(Canvas::new("").fixed_size((5, 1)))
+        .child(main_view)
+        .child(Canvas::new("").fixed_size((5, 1)));
 
     siv.add_layer(
         Layer::with_color(
-            LinearLayout::vertical()
-                .child(game_map_view)
-                .fixed_size((30, 30))
-            , ColorStyle::new(Color::Rgb(200, 200, 200), Color::Rgb(100, 100, 100))
+            side_padding
+            , ColorStyle::new(dont_care_color.clone(), Color::Rgb(100, 100, 100))
         )
     );
-
 
     siv.add_global_callback('q', |s| s.quit());
 
@@ -112,7 +144,7 @@ fn demo() {
         LinearLayout::vertical()
         .child(above_view)
         .fixed_size((40, 40))
-        ,ColorStyle::new(Color::Rgb(200, 200, 200), Color::Rgb(100, 100, 100)))
+        , ColorStyle::new(Color::Rgb(100, 100, 100), Color::Rgb(100, 100, 100)))
     );
 
     siv.add_global_callback('q', |s| s.quit());
