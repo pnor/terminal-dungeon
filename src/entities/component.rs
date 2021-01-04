@@ -1,12 +1,15 @@
-use specs::{Component, VecStorage};
+use specs::{HashMapStorage, VecStorage, Component, Entity};
 use cursive::theme::Color;
+
+extern crate nalgebra as na;
+use na::{Vector2};
+
 
 /// An Entity's absolute position in the world
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Position {
-    pub x: i32,
-    pub y: i32
+    pub vec2: Vector2<usize>
 }
 
 /// How an entitiy appears in the character-based world
@@ -25,4 +28,12 @@ pub struct Shade {
     pub color: Color,
     /// 0.0 .. 1.0
     pub alpha: f32
+}
+
+/// Camera that draws to a canvas
+#[derive(Component, Debug)]
+#[storage(HashMapStorage)]
+pub struct Camera {
+    pub target: Entity,
+    pub offset: Vector2<usize>,
 }

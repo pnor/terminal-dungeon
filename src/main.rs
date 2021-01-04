@@ -1,8 +1,9 @@
 mod world;
 mod entities;
+mod utility;
+mod systems;
 
 use crate::PaletteColor::Background;
-use std::rc::Rc;
 
 use cursive::Cursive;
 use cursive::theme::*;
@@ -15,10 +16,10 @@ use specs::{Builder, Component, DispatcherBuilder,
 
 use world::map;
 
-use entities::{entity, component, text_render_system, factory, text_canvas};
-use component::{Position, Appearance};
-use text_canvas::TextCanvas;
-use text_render_system::TextRenderSystem;
+use entities::{component, factory};
+use component::{Position, Appearance, Camera};
+use systems::{TextRenderSystem, CameraSystem};
+use utility::text_canvas::{TextCanvas, create_canvas};
 
 fn main() {
     setup_word();
@@ -31,19 +32,22 @@ fn setup_word() {
     // Register Components
     world.register::<Position>();
     world.register::<Appearance>();
+    world.register::<Camera>();
 
     // Add resources
     let map = map::test_room();
     world.insert(map);
-    let canvas = text_canvas::create_canvas(20, 20);
+    let canvas = create_canvas(20, 20);
     world.insert(canvas);
 
     // Make a player
-    let _ = factory::make_player(&mut world);
+    let player = factory::make_player(&mut world);
+    let _ = factory::make_camera(player, &mut world);
 
     // Setup Dispatch
     let mut dispatcher = DispatcherBuilder::new()
-        .with(TextRenderSystem, "text_render_system", &[])
+        .with(CameraSystem, "Camera", &[])
+        .with_thread_local(TextRenderSystem)
         .build();
 
     // Run world once

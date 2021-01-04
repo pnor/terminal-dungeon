@@ -1,4 +1,4 @@
-enum Tile {
+pub enum Tile {
     Blank,
     Wall
 }
@@ -14,13 +14,17 @@ impl Clone for Tile {
 
 #[derive(Default)]
 pub struct Map {
-    tiles: Vec<Vec<Tile>>
+    pub tiles: Vec<Vec<Tile>>
 }
 
 impl Map {
 
-    pub fn tiles(&self) -> &Vec<Vec<Tile>> {
-        &self.tiles
+    pub fn dimensions(&self) -> (usize, usize) {
+        if self.tiles.len() > 0 {
+            (self.tiles.len(), self.tiles[0].len())
+        } else {
+            (0, 0)
+        }
     }
 
     pub fn as_string(&self) -> String {
@@ -49,10 +53,6 @@ impl Map {
     }
 
 }
-
-// impl Default for Map {
-//
-// }
 
 pub fn test_room() -> Map {
     let mut tiles = vec![vec![Tile::Blank; 10]; 10];
