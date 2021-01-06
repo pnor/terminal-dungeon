@@ -1,5 +1,5 @@
 use specs::{HashMapStorage, VecStorage, Component, Entity};
-use cursive::theme::Color;
+use cursive::theme::{Color, Effect};
 
 extern crate nalgebra as na;
 use na::{Vector2};
@@ -18,7 +18,8 @@ pub struct Position {
 #[storage(VecStorage)]
 pub struct Appearance {
     pub icon: char,
-    pub color: Color
+    pub color: Color,
+    pub face: Effect
 }
 
 /// How an entity affects entities below it when rendering

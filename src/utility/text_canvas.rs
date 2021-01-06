@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use cursive::theme::{Color, Style, Effect};
 use cursive::utils::markup::StyledString;
 use crate::utility::color_util;
@@ -74,6 +75,24 @@ impl TextCanvas {
             (self.symbols.len(), self.symbols[0].len())
         } else {
             (0, 0)
+        }
+    }
+
+    /// Returns `true` if (x, y) is in bounds of `self.tiles`
+    pub fn in_bounds(&self, x: i64, y: i64) -> bool {
+        if self.symbols.len() > 0 {
+            let width: i64 = match self.symbols.len().try_into() {
+                Ok(width) => width,
+                Err(_) => return false
+            };
+            let height: i64 = match self.symbols[0].len().try_into() {
+                Ok(height) => height,
+                Err(_) => return false
+            };
+
+            (x >= 0 && x < width) && (y >= 0 && y < height)
+        } else {
+            false
         }
     }
 
