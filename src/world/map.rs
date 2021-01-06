@@ -1,3 +1,7 @@
+use std::ops::Index;
+
+use crate::utility::conversions;
+
 pub enum Tile {
     Blank,
     Wall
@@ -13,8 +17,19 @@ impl Clone for Tile {
 }
 
 #[derive(Default)]
+/// Map of the game world
 pub struct Map {
-    pub tiles: Vec<Vec<Tile>>
+    tiles: Vec<Vec<Tile>>
+}
+
+impl Index<usize> for Map {
+
+    type Output = Vec<Tile>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.tiles[index]
+    }
+
 }
 
 impl Map {
@@ -27,29 +42,16 @@ impl Map {
         }
     }
 
-    pub fn as_string(&self) -> String {
-        if self.tiles.len() == 0 { return "".to_string(); }
+    /// Returns `true` if (x, y) is in bounds of `self.tiles`
+    pub fn in_bounds(&self, x: i32, y: i32) -> bool {
+        if self.tiles.len() > 0 {
+            let width = conversions::as_i32(self.tiles.len());
+            let height = conversions::as_i32(self.tiles[0].len());
 
-        let tiles_size = self.tiles.len() * self.tiles[0].len();
-
-        let mut string_repr = String::with_capacity(tiles_size);
-
-
-        for i in 0..(self.tiles.len()) {
-            for j in 0..(self.tiles[0].len()) {
-                let char_for_tile = match self.tiles[i][j] {
-                    Tile::Blank => ' ',
-                    Tile::Wall => '#'
-                };
-                string_repr.push(char_for_tile);
-            }
-
-            if i != self.tiles.len() - 1 {
-                string_repr.push('\n');
-            }
+            (x >= 0 && x < width) && (y >= 0 && y < height)
+        } else {
+            false
         }
-
-        string_repr.to_string()
     }
 
 }

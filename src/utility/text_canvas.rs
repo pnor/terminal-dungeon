@@ -6,36 +6,7 @@ use crate::utility::{color_util, conversions};
 extern crate nalgebra as na;
 use na::{clamp, Vector2};
 
-#[derive(Clone)]
-pub struct CanvasSymbol {
-    pub character: char,
-    pub color: Color,
-    pub face: Effect
-}
-
-impl CanvasSymbol {
-
-    fn styled_string(&self) -> StyledString {
-        StyledString::styled(
-            self.character.to_string(),
-            Style::from(self.color).combine(self.face)
-        )
-    }
-
-}
-
-impl Default for CanvasSymbol {
-
-    fn default() -> CanvasSymbol {
-        CanvasSymbol {
-            character: ' ',
-            color: Color::Rgb(0, 0, 0),
-            face: Effect::Simple
-        }
-    }
-
-}
-
+/// Canvas that is used to generate a string to represent the portion of the map on camera
 pub struct TextCanvas {
     symbols: Vec<Vec<CanvasSymbol>>
 }
@@ -78,7 +49,7 @@ impl TextCanvas {
         }
     }
 
-    /// Returns `true` if (x, y) is in bounds of `self.tiles`
+    /// Returns `true` if (x, y) is in bounds of `self.symbols`
     pub fn in_bounds(&self, x: i32, y: i32) -> bool {
         if self.symbols.len() > 0 {
             let width = conversions::as_i32(self.symbols.len());
@@ -124,3 +95,34 @@ impl TextCanvas {
     }
 
 }
+
+#[derive(Clone)]
+pub struct CanvasSymbol {
+    pub character: char,
+    pub color: Color,
+    pub face: Effect
+}
+
+impl CanvasSymbol {
+
+    fn styled_string(&self) -> StyledString {
+        StyledString::styled(
+            self.character.to_string(),
+            Style::from(self.color).combine(self.face)
+        )
+    }
+
+}
+
+impl Default for CanvasSymbol {
+
+    fn default() -> CanvasSymbol {
+        CanvasSymbol {
+            character: ' ',
+            color: Color::Rgb(0, 0, 0),
+            face: Effect::Simple
+        }
+    }
+
+}
+

@@ -25,47 +25,65 @@ impl<'a> System<'a> for TextRenderSystem {
     fn run(&mut self, data: Self::SystemData) {
         let (map, mut canvas, pos, app, cam) = data;
 
-        // Use the camera
-        let mut camera_position: Option<&Position> = None;
-        for (_, position) in (&cam, &pos).join() {
-            camera_position = Some(position);
-            break;
-        }
-
-        let camera_position = match camera_position {
-            Some(pos) => pos,
-            None => return // If there is no camera, there is nothing to render
+        let camera_position = match get_camera_position(&cam, &pos) {
+            Some(camera_position) => camera_position,
+            None => return // Can't render without a camera...
         };
 
-        // Draw the map
-        let (start_x, end_x, start_y, end_y) = get_camera_corners(&camera_position, canvas.dimensions());
+        draw_map(camera_position, &mut canvas, &map);
 
-        for i in start_x..end_x {
-            for j in start_y..end_y {
-                let symbol: CanvasSymbol;
-                let (map_width, map_height) = map.dimensions();
+        draw_entities(&pos, &app, camera_position, &mut canvas)
+    }
 
-                // OOB
-                // TODO avoid `as`
-                if (i < 0 || j < 0) || (i as usize >= map_width || j as usize >= map_height) {
-                    symbol = CanvasSymbol {
-                        character: '?',
-                        color: Color::Rgb(255, 50, 0),
-                        face: Effect::Simple
-                    };
-                } else {
-                    symbol = map_tile_to_canvas_symbol(&map.tiles[i as usize][j as usize]);
-                }
+}
 
-                match world_to_canvas((i, j), &camera_position, &canvas) {
-                    Some((x, y)) => canvas.set_symbol(Vector2::new(x, y), symbol),
-                    None => ()
+/// Returns reference to the `Position` of a camera in the world
+/// The Camera chosen is essentially random
+fn get_camera_position<'a>(
+    cam: &'a ReadStorage<Camera>,
+    pos: &'a ReadStorage<Position>
+) -> Option<&'a Position> {
+    // Use the camera
+    let mut camera_position: Option<&Position> = None;
+    for (_, position) in (&*cam, &*pos).join() {
+        camera_position = Some(position);
+        break;
+    }
+    camera_position
+}
+
+fn draw_map(camera_position: &Position, canvas: &mut TextCanvas, map: &Map) {
+    let (start_x, end_x, start_y, end_y) = get_camera_corners(&camera_position, canvas.dimensions());
+
+    for i in start_x..end_x {
+        for j in start_y..end_y {
+            let symbol: CanvasSymbol;
+
+            if map.in_bounds(i, j) {
+                symbol = map_tile_to_canvas_symbol(&map[i as usize][j as usize]);
+            } else {
+                symbol = CanvasSymbol {
+                    character: '?',
+                    color: Color::Rgb(255, 50, 0),
+                    face: Effect::Simple
                 };
             }
-        }
 
-        // Draw Entities
-        for (position, appearence) in (&pos, &app).join() {
+            match world_to_canvas((i, j), camera_position, &canvas) {
+                Some((x, y)) => canvas.set_symbol(Vector2::new(x, y), symbol),
+                None => ()
+            };
+        }
+    }
+}
+
+fn draw_entities(
+    pos: &ReadStorage<Position>,
+    app: &ReadStorage<Appearance>,
+    camera_position: &Position,
+    canvas: &mut TextCanvas
+    ) {
+        for (position, appearence) in (&*pos, &*app).join() {
             let position = (position.vec2[0], position.vec2[1]);
 
             match world_to_canvas(position, &camera_position, &canvas) {
@@ -76,8 +94,6 @@ impl<'a> System<'a> for TextRenderSystem {
                 None => ()
             }
         }
-    }
-
 }
 
 fn map_tile_to_canvas_symbol(tile: &Tile) -> CanvasSymbol {
