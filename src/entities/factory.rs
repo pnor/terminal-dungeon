@@ -9,7 +9,7 @@ pub fn make_player(world: &mut World) -> Entity {
     let starting_position = Position { vec2: Vector2::new(4, 4) };
     let appearence = Appearance {
         icon: '@',
-        color: Color::Light(BaseColor::Cyan),
+        color: Color::Dark(BaseColor::Red),
         face: Effect::Simple
     };
     world.create_entity().with(starting_position).with(appearence).build()

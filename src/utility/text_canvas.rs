@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 use cursive::theme::{Color, Style, Effect};
 use cursive::utils::markup::StyledString;
-use crate::utility::color_util;
+use crate::utility::{color_util, conversions};
 
 extern crate nalgebra as na;
 use na::{clamp, Vector2};
@@ -79,16 +79,10 @@ impl TextCanvas {
     }
 
     /// Returns `true` if (x, y) is in bounds of `self.tiles`
-    pub fn in_bounds(&self, x: i64, y: i64) -> bool {
+    pub fn in_bounds(&self, x: i32, y: i32) -> bool {
         if self.symbols.len() > 0 {
-            let width: i64 = match self.symbols.len().try_into() {
-                Ok(width) => width,
-                Err(_) => return false
-            };
-            let height: i64 = match self.symbols[0].len().try_into() {
-                Ok(height) => height,
-                Err(_) => return false
-            };
+            let width = conversions::as_i32(self.symbols.len());
+            let height = conversions::as_i32(self.symbols[0].len());
 
             (x >= 0 && x < width) && (y >= 0 && y < height)
         } else {

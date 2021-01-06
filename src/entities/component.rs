@@ -9,7 +9,7 @@ use na::{Vector2};
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Position {
-    pub vec2: Vector2<usize>
+    pub vec2: Vector2<i32>
 }
 
 /// How an entitiy appears in the character-based world
@@ -36,5 +36,5 @@ pub struct Shade {
 #[storage(HashMapStorage)]
 pub struct Camera {
     pub target: Entity,
-    pub offset: Vector2<usize>,
+    pub offset: Vector2<i32>,
 }

@@ -1,9 +1,11 @@
 use std::convert::TryInto;
 use specs::{System, SystemData, ReadStorage, Read, Write, Join};
+use cursive::theme::{Color, Effect};
+
 use crate::entities::component::{Position, Appearance, Camera};
 use crate::utility::text_canvas::{TextCanvas, CanvasSymbol};
+use crate::utility::conversions;
 use crate::world::map::{Map, Tile};
-use cursive::theme::{Color, Effect};
 
 extern crate nalgebra as na;
 use na::Vector2;
@@ -64,7 +66,7 @@ impl<'a> System<'a> for TextRenderSystem {
 
         // Draw Entities
         for (position, appearence) in (&pos, &app).join() {
-            let position = (as_i64(position.vec2[0]), as_i64(position.vec2[1]));
+            let position = (position.vec2[0], position.vec2[1]);
 
             match world_to_canvas(position, &camera_position, &canvas) {
                 Some((x, y)) => {
@@ -110,21 +112,21 @@ fn map_appearence_to_canvas_symbol(appearence: &Appearance) -> CanvasSymbol {
 /// * `camera_center` - location in world space of where the camera is centered
 /// * `canvas_dimension` - (width, height) of the canvas
 fn world_to_canvas(
-    xy: (i64, i64),
+    xy: (i32, i32),
     camera_center: &Position,
     canvas: &TextCanvas
 ) -> Option<(usize, usize)> {
     let (canvas_width, canvas_height) = match canvas.dimensions() {
-        (w, h) => (as_i64(w), as_i64(h))
+        (w, h) => (conversions::as_i32(w), conversions::as_i32(h))
     };
-    let (center_x, center_y) = (as_i64(camera_center.vec2[0]), as_i64(camera_center.vec2[1]));
+    let (center_x, center_y) = (camera_center.vec2[0], camera_center.vec2[1]);
     let (x, y) = xy;
 
     let canvas_x = x - center_x + (canvas_width / 2);
     let canvas_y = y - center_y + (canvas_height / 2);
 
     if canvas.in_bounds(canvas_x, canvas_y) {
-        Some((as_usize(canvas_x), as_usize(canvas_y)))
+        Some((conversions::as_usize(canvas_x), conversions::as_usize(canvas_y)))
     } else {
         None
     }
@@ -136,35 +138,13 @@ fn world_to_canvas(
 /// # Arguements
 /// * `camera_position` - positon the camera is centered at
 /// * `canvas_dimension` - (width, height) of canvas
-fn get_camera_corners(camera_position: &Position, canvas_dimensions: (usize, usize)) -> (i64, i64, i64, i64) {
+fn get_camera_corners(camera_position: &Position, canvas_dimensions: (usize, usize)) -> (i32, i32, i32, i32) {
     let (width, height) = canvas_dimensions;
 
-    let start_x: i64 = as_i64(camera_position.vec2[0]) - as_i64(width / 2);
-    let end_x: i64 = as_i64(camera_position.vec2[0]) + as_i64(width / 2);
-    let start_y: i64 =  as_i64(camera_position.vec2[1]) - as_i64(height / 2);
-    let end_y: i64 =  as_i64(camera_position.vec2[1]) + as_i64(height / 2);
+    let start_x: i32 = camera_position.vec2[0] - conversions::as_i32(width / 2);
+    let end_x: i32 = camera_position.vec2[0] + conversions::as_i32(width / 2);
+    let start_y: i32 =  camera_position.vec2[1] - conversions::as_i32(height / 2);
+    let end_y: i32 =  camera_position.vec2[1] + conversions::as_i32(height / 2);
 
     (start_x, end_x, start_y, end_y)
-}
-
-/// Converts `num` to `i64`, clamping it to `i64`'s max value if `num` is too big
-fn as_i64(num: usize) -> i64 {
-    match num.try_into() {
-        Ok(result) => result,
-        Err(_) => i64::MAX
-    }
-}
-
-/// Converts `num` to `usize`, clamping it between 0 and `usize::MAX` if `num` is OOB
-fn as_usize(num: i64) -> usize {
-    match num.try_into() {
-        Ok(result) => result,
-        Err(_) => {
-            if num < 0 {
-                0
-            } else {
-                usize::MAX
-            }
-        }
-    }
 }

@@ -1,6 +1,8 @@
 use cursive::theme::Color;
 use cursive::theme::BaseColor;
 
+/// Returns `color` as an `Color::Rgb` enum.
+/// `Color::TerminalDefault` is converted to `Color::Rgb(255, 255, 255)`
 pub fn to_rgb(color: Color) -> Color {
     match color {
         Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
