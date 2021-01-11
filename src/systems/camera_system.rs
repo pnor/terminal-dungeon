@@ -1,8 +1,5 @@
-use specs::{System, SystemData, Entities, ReadStorage, WriteStorage, Join};
+use specs::{System, Entities, ReadStorage, WriteStorage, Join};
 use crate::entities::component::{Position, Camera};
-
-extern crate nalgebra as na;
-use na::{Vector2};
 
 /// System for controlling camera movement
 pub struct CameraSystem;

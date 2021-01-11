@@ -2,7 +2,7 @@ use specs::{HashMapStorage, VecStorage, Component, Entity};
 use cursive::theme::{Color, Effect};
 
 extern crate nalgebra as na;
-use na::{Vector2};
+use na::Vector2;
 
 
 /// An Entity's absolute position in the world
@@ -38,3 +38,9 @@ pub struct Camera {
     pub target: Entity,
     pub offset: Vector2<i32>,
 }
+
+
+/// Entity Movement through `Command`
+#[derive(Component)]
+#[storage(HashMapStorage)]
+pub struct CommandResponse;

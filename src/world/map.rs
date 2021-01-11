@@ -34,14 +34,6 @@ impl Index<usize> for Map {
 
 impl Map {
 
-    pub fn dimensions(&self) -> (usize, usize) {
-        if self.tiles.len() > 0 {
-            (self.tiles.len(), self.tiles[0].len())
-        } else {
-            (0, 0)
-        }
-    }
-
     /// Returns `true` if (x, y) is in bounds of `self.tiles`
     pub fn in_bounds(&self, x: i32, y: i32) -> bool {
         if self.tiles.len() > 0 {

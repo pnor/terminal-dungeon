@@ -2,24 +2,21 @@ mod world;
 mod entities;
 mod utility;
 mod systems;
+mod game;
 
-use crate::PaletteColor::Background;
-
-use cursive::Cursive;
 use cursive::theme::*;
 use cursive::traits::*;
-use cursive::utils::markup::StyledString;
 use cursive::views::*;
 
-use specs::{Builder, Component, DispatcherBuilder,
-            VecStorage, World, WorldExt};
+use specs::{DispatcherBuilder, World, WorldExt};
 
 use world::map;
 
 use entities::{component, factory};
-use component::{Position, Appearance, Camera};
-use systems::{TextRenderSystem, CameraSystem};
+use component::*;
+use systems::{CameraSystem, TextRenderSystem, CommandSystem};
 use utility::text_canvas::{TextCanvas, create_canvas};
+use game::Command;
 
 fn main() {
     setup_word();
@@ -33,12 +30,15 @@ fn setup_word() {
     world.register::<Position>();
     world.register::<Appearance>();
     world.register::<Camera>();
+    world.register::<CommandResponse>();
 
     // Add resources
     let map = map::test_room();
     world.insert(map);
     let canvas = create_canvas(20, 20);
     world.insert(canvas);
+
+    world.insert(Command::None);
 
     // Make a player
     let player = factory::make_player(&mut world);
@@ -47,6 +47,7 @@ fn setup_word() {
     // Setup Dispatch
     let mut dispatcher = DispatcherBuilder::new()
         .with(CameraSystem, "Camera", &[])
+        .with(CommandSystem, "Command", &[])
         .with_thread_local(TextRenderSystem)
         .build();
 
@@ -64,7 +65,6 @@ fn draw_room(canvas: &TextCanvas) {
 
     let mut theme = siv.current_theme().clone();
     theme.shadow = true;
-    // theme.palette[Background] = Color::Rgb(10, 10, 10);
     siv.set_theme(theme);
 
     let (canvas_width, canvas_height) = canvas.dimensions();
@@ -113,46 +113,4 @@ fn draw_room(canvas: &TextCanvas) {
     siv.add_global_callback('q', |s| s.quit());
 
     siv.run();
-}
-
-fn demo() {
-    let mut siv = cursive::default();
-
-    let mut styled = StyledString::plain("I'm ");
-    styled.append(StyledString::styled("floating", Color::Rgb(255, 100, 100)));
-    styled.append(StyledString::styled(
-            "!",
-            Style::from(Color::Rgb(50, 50, 255)).combine(Effect::Bold)));
-
-    let mainBody =
-        LinearLayout::vertical()
-        .child(TextView::new(styled))
-        .fixed_size((10, 10))
-        ;
-
-    let above_view =
-        LinearLayout::vertical()
-        .child(Canvas::new("").fixed_size((1, 1)))
-        .child(
-            LinearLayout::horizontal()
-            .child(Canvas::new("").fixed_size((1, 1)))
-            .child(ShadowView::new(
-                    mainBody
-                    ))
-            .child(Canvas::new("").fixed_size((1, 1)))
-            )
-        .child(Canvas::new("").fixed_size((1, 1)));
-
-    siv.add_layer(
-        Layer::with_color(
-        LinearLayout::vertical()
-        .child(above_view)
-        .fixed_size((40, 40))
-        , ColorStyle::new(Color::Rgb(100, 100, 100), Color::Rgb(100, 100, 100)))
-    );
-
-    siv.add_global_callback('q', |s| s.quit());
-
-    siv.run();
-
 }

@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use cursive::theme::{Color, Style, Effect};
 use cursive::utils::markup::StyledString;
 use crate::utility::{color_util, conversions};
@@ -12,7 +11,7 @@ pub struct TextCanvas {
 }
 
 pub fn create_canvas(width: usize, height: usize) -> TextCanvas {
-    let mut symbols = vec![vec![CanvasSymbol::default(); height]; width];
+    let symbols = vec![vec![CanvasSymbol::default(); height]; width];
     TextCanvas { symbols }
 }
 

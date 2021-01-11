@@ -1,5 +1,4 @@
-use std::convert::TryInto;
-use specs::{System, SystemData, ReadStorage, Read, Write, Join};
+use specs::{System, ReadStorage, Read, Write, Join};
 use cursive::theme::{Color, Effect};
 
 use crate::entities::component::{Position, Appearance, Camera};
