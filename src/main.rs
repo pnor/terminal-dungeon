@@ -4,6 +4,9 @@ mod utility;
 mod systems;
 mod game;
 
+use crate::map::Map;
+use cursive::Cursive;
+use specs::Dispatcher;
 use cursive::theme::*;
 use cursive::traits::*;
 use cursive::views::*;
@@ -19,54 +22,75 @@ use utility::text_canvas::{TextCanvas, create_canvas};
 use game::Command;
 
 fn main() {
-    setup_word();
+    let mut world = World::new();
+
+    register_components(&mut world);
+    add_resources(&mut world);
+    make_player(&mut world);
+    let mut dispatch = setup_dispatch();
+    let mut siv = setup_cursive();
+    setup_display(&mut siv, &world);
+    setup_callbacks(&mut siv, &mut world);
+
+    siv.run();
 }
 
 fn setup_word() {
-    let mut world = World::new();
-    world.insert(3);
+    // Run world once
+    // dispatcher.dispatch(&mut world);
+    // world.maintain();
 
-    // Register Components
+    // update display
+    // let mutated_canvas = world.read_resource::<TextCanvas>();
+    // draw_room(&mutated_canvas);
+}
+
+fn register_components(world: &mut World) {
     world.register::<Position>();
     world.register::<Appearance>();
     world.register::<Camera>();
     world.register::<CommandResponse>();
+}
 
-    // Add resources
-    let map = map::test_room();
+fn add_resources(world: &mut World) {
+    let map = initialize_map();
+    let canvas = TextCanvas::for_map(&map);
+
     world.insert(map);
-    let canvas = create_canvas(20, 20);
     world.insert(canvas);
 
     world.insert(Command::None);
+}
 
-    // Make a player
-    let player = factory::make_player(&mut world);
-    let _ = factory::make_camera(player, &mut world);
+fn initialize_map() -> Map {
+    map::test_room()
+}
 
-    // Setup Dispatch
-    let mut dispatcher = DispatcherBuilder::new()
+fn make_player(world: &mut World) {
+    let player = factory::make_player(world);
+    let _ = factory::make_camera(player, world);
+}
+
+fn setup_dispatch() -> Dispatcher<'static, 'static> {
+    DispatcherBuilder::new()
         .with(CameraSystem, "Camera", &[])
         .with(CommandSystem, "Command", &[])
         .with_thread_local(TextRenderSystem)
-        .build();
-
-    // Run world once
-    dispatcher.dispatch(&mut world);
-    world.maintain();
-
-    // update display
-    let mutated_canvas = world.read_resource::<TextCanvas>();
-    draw_room(&mutated_canvas);
+        .build()
 }
 
-fn draw_room(canvas: &TextCanvas) {
+fn setup_cursive() -> Cursive {
     let mut siv = cursive::default();
 
     let mut theme = siv.current_theme().clone();
     theme.shadow = true;
     siv.set_theme(theme);
 
+    siv
+}
+
+fn setup_display(siv: &mut Cursive, world: &World) {
+    let canvas = world.read_resource::<TextCanvas>();
     let (canvas_width, canvas_height) = canvas.dimensions();
 
     let dont_care_color = Color::Rgb(0, 0, 0); // color i don't think will be seen
@@ -109,8 +133,11 @@ fn draw_room(canvas: &TextCanvas) {
             , ColorStyle::new(dont_care_color.clone(), Color::Rgb(100, 100, 100))
         )
     );
+}
 
+fn setup_callbacks(siv: &mut Cursive, world: & mut World) {
     siv.add_global_callback('q', |s| s.quit());
-
-    siv.run();
+    // siv.add_global_callback('j', |s| {
+    //     let mut command = world.write_resource::<Command>();
+    // });
 }

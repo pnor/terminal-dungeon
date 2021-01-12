@@ -18,9 +18,9 @@ impl <'a> System<'a> for CommandSystem {
         for (_, position) in (&command_response, &mut position).join() {
             match *command {
                 Command::Up => (*position).vec2[1] += 1,
-                Command::Down => position.vec2[1] -= 1,
-                Command::Right => position.vec2[0] += 1,
-                Command::Left => position.vec2[0] -= 1,
+                Command::Down => (*position).vec2[1] -= 1,
+                Command::Right => (*position).vec2[0] += 1,
+                Command::Left => (*position).vec2[0] -= 1,
                 _ => ()
             };
         }

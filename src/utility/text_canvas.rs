@@ -1,3 +1,4 @@
+use crate::map::Map;
 use cursive::theme::{Color, Style, Effect};
 use cursive::utils::markup::StyledString;
 use crate::utility::{color_util, conversions};
@@ -25,6 +26,13 @@ impl Default for TextCanvas {
 
 impl TextCanvas {
 
+    /// Returns `TextCanvas` with default symbols of the same dimensions as the map
+    pub fn for_map(map: &Map) -> Self {
+        let (map_width, map_height) = map.dimensions();
+        TextCanvas { symbols: vec![vec![CanvasSymbol::default(); map_height]; map_width] }
+    }
+
+    /// Returns `StyledString` representation of the canvas
     pub fn as_styled_string(&self) -> StyledString {
         let mut string = StyledString::default();
 
@@ -39,7 +47,7 @@ impl TextCanvas {
         string
     }
 
-    /// Reurns `(widht, height)` of the canvas
+    /// Returns `(width, height)` of the canvas
     pub fn dimensions(&self) -> (usize, usize) {
         if self.symbols.len() > 0 {
             (self.symbols.len(), self.symbols[0].len())
