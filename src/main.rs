@@ -42,16 +42,6 @@ fn main() {
     siv.run();
 }
 
-fn setup_word() {
-    // Run world once
-    // dispatcher.dispatch(&mut world);
-    // world.maintain();
-
-    // update display
-    // let mutated_canvas = world.read_resource::<TextCanvas>();
-    // draw_room(&mutated_canvas);
-}
-
 fn register_components(world: &mut World) {
     world.register::<Position>();
     world.register::<Appearance>();
@@ -102,11 +92,11 @@ fn setup_display(siv: &mut Cursive, world: &World) {
 
     let dont_care_color = Color::Rgb(0, 0, 0); // color i don't think will be seen
 
-    let game_map_view =
-        Panel::new(
-            TextView::new(canvas.as_styled_string())
-                .fixed_size((canvas_width - 1, canvas_height - 1))
-            );
+    let map_text_view = TextView::new(canvas.as_styled_string())
+                .with_name("canvas")
+                .fixed_size((canvas_width - 1, canvas_height - 1));
+
+    let game_map_view = Panel::new(map_text_view);
 
     let main_view =
         LinearLayout::vertical()
@@ -164,27 +154,20 @@ fn setup_callbacks<'a>(
 
         dispatcher.dispatch(&world);
         world.maintain();
+
+        update_display(s, &mut world);
     });
 
     siv.add_global_callback('q', |s| s.quit());
 }
 
-/*
-    siv.add_global_callback('j', move |s| {
-        unsafe {
-            let world_pointer = world_pointer.as_ptr();
-            let mut world = &mut *world_pointer;
+fn update_display(siv: &mut Cursive, world: &mut World) {
+    let canvas = world.read_resource::<TextCanvas>();
 
-            let dispatcher_pointer = dispatch_pointer.as_ptr();
-            let mut dispatcher = &*dispatch_pointer;
-
-            {
-            let mut command = world.write_resource::<Command>();
-            *command = Command::Down;
-            }
-
-            dispatcher.borrow_mut().dispatch(&world);
-            world.maintain();
-        }
-    });
-*/
+    match siv.find_name::<TextView>("canvas") {
+        Some(mut text_view) => {
+            text_view.set_content(canvas.as_styled_string())
+        },
+        None => ()
+    }
+}
