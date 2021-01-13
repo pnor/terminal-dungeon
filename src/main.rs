@@ -4,6 +4,9 @@ mod utility;
 mod systems;
 mod game;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use crate::map::Map;
 use cursive::Cursive;
 use specs::Dispatcher;
@@ -30,7 +33,11 @@ fn main() {
     let mut dispatch = setup_dispatch();
     let mut siv = setup_cursive();
     setup_display(&mut siv, &world);
-    setup_callbacks(&mut siv, &mut world);
+    setup_callbacks(
+        &mut siv,
+        Rc::new(RefCell::new(world)),
+        Rc::new(RefCell::new(dispatch))
+    );
 
     siv.run();
 }
@@ -71,7 +78,7 @@ fn make_player(world: &mut World) {
     let _ = factory::make_camera(player, world);
 }
 
-fn setup_dispatch() -> Dispatcher<'static, 'static> {
+fn setup_dispatch<'a>() -> Dispatcher<'a, 'a> {
     DispatcherBuilder::new()
         .with(CameraSystem, "Camera", &[])
         .with(CommandSystem, "Command", &[])
@@ -135,9 +142,49 @@ fn setup_display(siv: &mut Cursive, world: &World) {
     );
 }
 
-fn setup_callbacks(siv: &mut Cursive, world: & mut World) {
+fn setup_callbacks<'a>(
+    siv: &mut Cursive,
+    world_pointer: Rc<RefCell<World>>,
+    dispatch_pointer: Rc<RefCell<Dispatcher<'static, 'static>>>
+) {
+    let world_pointer = world_pointer.clone();
+    let dispatch_pointer = dispatch_pointer.clone();
+
+    siv.add_global_callback('j', move |s| {
+        let world_refcell = &*world_pointer;
+        let mut world = world_refcell.borrow_mut();
+
+        let dispatch_refcell = &*dispatch_pointer;
+        let mut dispatcher = dispatch_refcell.borrow_mut();
+
+        {
+            let mut command = world.write_resource::<Command>();
+            *command = Command::Down;
+        }
+
+        dispatcher.dispatch(&world);
+        world.maintain();
+    });
+
     siv.add_global_callback('q', |s| s.quit());
-    // siv.add_global_callback('j', |s| {
-    //     let mut command = world.write_resource::<Command>();
-    // });
 }
+
+/*
+    siv.add_global_callback('j', move |s| {
+        unsafe {
+            let world_pointer = world_pointer.as_ptr();
+            let mut world = &mut *world_pointer;
+
+            let dispatcher_pointer = dispatch_pointer.as_ptr();
+            let mut dispatcher = &*dispatch_pointer;
+
+            {
+            let mut command = world.write_resource::<Command>();
+            *command = Command::Down;
+            }
+
+            dispatcher.borrow_mut().dispatch(&world);
+            world.maintain();
+        }
+    });
+*/
