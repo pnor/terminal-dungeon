@@ -1,4 +1,5 @@
 /// Possible actions the player gives the games
+#[derive(Copy, Clone)]
 pub enum Command {
     None,
     Up,

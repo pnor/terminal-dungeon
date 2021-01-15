@@ -132,33 +132,46 @@ fn setup_display(siv: &mut Cursive, world: &World) {
     );
 }
 
-fn setup_callbacks<'a>(
+fn setup_callbacks(
     siv: &mut Cursive,
     world_pointer: Rc<RefCell<World>>,
     dispatch_pointer: Rc<RefCell<Dispatcher<'static, 'static>>>
 ) {
-    let world_pointer = world_pointer.clone();
-    let dispatch_pointer = dispatch_pointer.clone();
+    let mut command_keybinds = vec![
+        ('j', Command::Down),
+        ('k', Command::Up),
+        ('h', Command::Left),
+        ('l', Command::Right)
+    ];
 
-    siv.add_global_callback('j', move |s| {
-        let world_refcell = &*world_pointer;
-        let mut world = world_refcell.borrow_mut();
 
-        let dispatch_refcell = &*dispatch_pointer;
-        let mut dispatcher = dispatch_refcell.borrow_mut();
+    for (input, command) in command_keybinds {
+        let world_pointer = world_pointer.clone();
+        let dispatch_pointer = dispatch_pointer.clone();
+        siv.add_global_callback(input, move |s| {
+            let world_refcell = &*world_pointer;
+            let mut world = world_refcell.borrow_mut();
 
-        {
-            let mut command = world.write_resource::<Command>();
-            *command = Command::Down;
-        }
+            let dispatch_refcell = &*dispatch_pointer;
+            let mut dispatcher = dispatch_refcell.borrow_mut();
 
-        dispatcher.dispatch(&world);
-        world.maintain();
-
-        update_display(s, &mut world);
-    });
+            update_command(&mut world, command);
+            run_world(&mut world, &mut dispatcher);
+            update_display(s, &mut world);
+        });
+    }
 
     siv.add_global_callback('q', |s| s.quit());
+}
+
+fn update_command(world: &mut World, command: Command) {
+    let mut resource = world.write_resource::<Command>();
+    *resource = command;
+}
+
+fn run_world(world: &mut World, dispatcher: &mut Dispatcher) {
+    dispatcher.dispatch(&world);
+    world.maintain();
 }
 
 fn update_display(siv: &mut Cursive, world: &mut World) {
