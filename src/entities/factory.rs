@@ -21,9 +21,16 @@ pub fn make_player(world: &mut World) -> Entity {
 }
 
 pub fn make_camera(target: Entity, world: &mut World) -> Entity {
-    let camera = Camera { target, offset: Vector2::new(0, 0) };
+    let follow = Follow { target, offset: Vector2::new(0, 0) };
+    let camera = Camera;
+    let appearence = Appearance {
+        icon: 'C',
+        color: Color::Rgb(0, 150, 0),
+        face: Effect::Simple
+    };
     world.create_entity()
-         .with(camera)
+        .with(camera)
+        .with(appearence)
         .with(Position { vec2: Vector2::new(0, 0) })
         .build()
 }

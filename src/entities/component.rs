@@ -31,14 +31,18 @@ pub struct Shade {
     pub alpha: f32
 }
 
-/// Camera that draws to a canvas
+/// Follows `target` entity with an offset
 #[derive(Component, Debug)]
 #[storage(HashMapStorage)]
-pub struct Camera {
+pub struct Follow {
     pub target: Entity,
     pub offset: Vector2<i32>,
 }
 
+/// Camera that draws to a canvas
+#[derive(Component, Debug)]
+#[storage(HashMapStorage)]
+pub struct Camera;
 
 /// Entity Movement through `Command`
 #[derive(Component)]

@@ -20,8 +20,8 @@ use world::map;
 
 use entities::{component, factory};
 use component::*;
-use systems::{CameraSystem, TextRenderSystem, CommandSystem};
-use utility::text_canvas::{TextCanvas, create_canvas};
+use systems::{FollowSystem, TextRenderSystem, CommandSystem};
+use utility::text_canvas::TextCanvas;
 use game::Command;
 
 fn main() {
@@ -30,7 +30,7 @@ fn main() {
     register_components(&mut world);
     add_resources(&mut world);
     make_player(&mut world);
-    let mut dispatch = setup_dispatch();
+    let dispatch = setup_dispatch();
     let mut siv = setup_cursive();
     setup_display(&mut siv, &world);
     setup_callbacks(
@@ -43,10 +43,11 @@ fn main() {
 }
 
 fn register_components(world: &mut World) {
-    world.register::<Position>();
     world.register::<Appearance>();
     world.register::<Camera>();
     world.register::<CommandResponse>();
+    world.register::<Follow>();
+    world.register::<Position>();
 }
 
 fn add_resources(world: &mut World) {
@@ -70,8 +71,8 @@ fn make_player(world: &mut World) {
 
 fn setup_dispatch<'a>() -> Dispatcher<'a, 'a> {
     DispatcherBuilder::new()
-        .with(CameraSystem, "Camera", &[])
         .with(CommandSystem, "Command", &[])
+        .with(FollowSystem, "Follow", &["Command"])
         .with_thread_local(TextRenderSystem)
         .build()
 }
@@ -137,7 +138,7 @@ fn setup_callbacks(
     world_pointer: Rc<RefCell<World>>,
     dispatch_pointer: Rc<RefCell<Dispatcher<'static, 'static>>>
 ) {
-    let mut command_keybinds = vec![
+    let command_keybinds = vec![
         ('j', Command::Down),
         ('k', Command::Up),
         ('h', Command::Left),
