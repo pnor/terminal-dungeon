@@ -1,2 +1,3 @@
-pub mod screens;
-mod views;
+mod map_view;
+
+pub use map_view::MapView;

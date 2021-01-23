@@ -1,5 +1,4 @@
 use std::ops::Index;
-
 use crate::utility::conversions;
 
 pub enum Tile {
