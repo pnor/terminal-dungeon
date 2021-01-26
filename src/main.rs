@@ -28,6 +28,9 @@ use systems::*;
 use utility::text_canvas::TextCanvas;
 use game::Command;
 
+extern crate nalgebra;
+use nalgebra::Vector2;
+
 
 fn main() {
     test();
@@ -65,7 +68,8 @@ fn test() {
 
     siv.add_global_callback('q', |s| s.quit());
     siv.add_global_callback('a', move |_| {
-        let canvas = TextCanvas::for_map(&map);
+        let mut canvas = TextCanvas::for_map(&map);
+        canvas.set_character(Vector2::new(2, 2), '@');
         sx.send(canvas).unwrap();
     });
 

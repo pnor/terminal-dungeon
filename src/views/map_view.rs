@@ -34,13 +34,18 @@ impl MapView {
 
 impl View for MapView {
 
+    fn required_size(&mut self, _: Vec2) -> Vec2 {
+        let (width, height) = self.buffer.dimensions();
+        Vec2::from((width, height))
+    }
+
     fn layout(&mut self, _: Vec2) {
-        self.update()
+        self.update();
     }
 
     fn draw(&self, printer: &Printer) {
         let mut canvas_lines = self.buffer.as_styled_strings();
-        let lines_enumerated = canvas_lines.drain((printer.size.y)..).enumerate();
+        let lines_enumerated = canvas_lines.drain(..canvas_lines.len()).enumerate();
 
         for (i, line) in lines_enumerated {
             let line_as_str: SpannedStr<Style> = span::SpannedStr::from(&line);
