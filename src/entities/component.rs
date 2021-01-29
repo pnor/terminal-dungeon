@@ -1,5 +1,5 @@
 use specs::{HashMapStorage, VecStorage, Component, Entity};
-use cursive::theme::{Color, Effect};
+use tui::style::{Color, Modifier};
 
 extern crate nalgebra as na;
 use na::Vector2;
@@ -18,8 +18,9 @@ pub struct Position {
 #[storage(VecStorage)]
 pub struct Appearance {
     pub icon: char,
-    pub color: Color,
-    pub face: Effect
+    pub foreground: Color,
+    pub background: Color,
+    pub modifiers: Vec<Modifier>
 }
 
 /// How an entity affects entities below it when rendering

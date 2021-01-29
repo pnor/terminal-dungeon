@@ -1,5 +1,5 @@
+use tui::style::{Color, Modifier};
 use specs::{System, ReadStorage, Read, Write, Join};
-use cursive::theme::{Color, Effect};
 
 use crate::entities::component::{Position, Appearance, Camera};
 use crate::utility::text_canvas::{TextCanvas, CanvasSymbol};
@@ -21,6 +21,7 @@ impl<'a> System<'a> for TextRenderSystem {
         ReadStorage<'a, Camera>
     );
 
+
     fn run(&mut self, data: Self::SystemData) {
         let (map, mut canvas, pos, app, cam) = data;
 
@@ -31,7 +32,7 @@ impl<'a> System<'a> for TextRenderSystem {
 
         draw_map(camera_position, &mut canvas, &map);
 
-        draw_entities(&pos, &app, camera_position, &mut canvas)
+        draw_entities(&pos, &app, camera_position, &mut canvas);
     }
 
 }
@@ -56,17 +57,7 @@ fn draw_map(camera_position: &Position, canvas: &mut TextCanvas, map: &Map) {
 
     for i in start_x..end_x {
         for j in start_y..end_y {
-            let symbol: CanvasSymbol;
-
-            if map.in_bounds(i, j) {
-                symbol = map_tile_to_canvas_symbol(&map[i as usize][j as usize]);
-            } else {
-                symbol = CanvasSymbol {
-                    character: '?',
-                    color: Color::Rgb(255, 50, 0),
-                    face: Effect::Simple
-                };
-            }
+            let symbol = get_symbol_for_location(i, j, map);
 
             match world_to_canvas((i, j), camera_position, &canvas) {
                 Some((x, y)) => canvas.set_symbol(Vector2::new(x, y), symbol),
@@ -76,45 +67,64 @@ fn draw_map(camera_position: &Position, canvas: &mut TextCanvas, map: &Map) {
     }
 }
 
+
+/// Gets the `CanvasSymbol` for the `(x, y)` pair on the screen. `(x, y)` are
+/// the coordinates in world space
+fn get_symbol_for_location(x: i32, y: i32, map: &Map) -> CanvasSymbol {
+    if map.in_bounds(x, y) {
+        get_canvas_symbol_for_tile(&map[x as usize][y as usize])
+    } else {
+        CanvasSymbol {
+            character: '?',
+            foreground: Color::Rgb(30, 30, 30),
+            background: Color::Rgb(0, 0, 0),
+            modifiers: vec!()
+        }
+    }
+}
+
 fn draw_entities(
     pos: &ReadStorage<Position>,
     app: &ReadStorage<Appearance>,
     camera_position: &Position,
     canvas: &mut TextCanvas
-    ) {
+) {
         for (position, appearence) in (&*pos, &*app).join() {
             let position = (position.vec2[0], position.vec2[1]);
 
-            match world_to_canvas(position, &camera_position, &canvas) {
-                Some((x, y)) => {
-                    let symbol = map_appearence_to_canvas_symbol(&appearence);
-                    canvas.set_symbol(Vector2::new(x, y), symbol);
-                }
-                None => ()
+            if let Some((x, y)) = world_to_canvas(position, &camera_position, &canvas) {
+                let symbol = get_canvas_symbol_for_appearence(appearence);
+
+                canvas.set_symbol(Vector2::new(x, y), symbol);
             }
         }
 }
 
-fn map_tile_to_canvas_symbol(tile: &Tile) -> CanvasSymbol {
+/// Returns `CanvasSymbol` that corresponds to the `Tile` of a tilemap
+/// TODO should move to another module?
+fn get_canvas_symbol_for_tile(tile: &Tile) -> CanvasSymbol {
     match tile {
         Tile::Blank => CanvasSymbol {
             character: ' ',
-            color: Color::Rgb(0, 0, 0),
-            face: Effect::Simple
+            foreground: Color::Black,
+            background: Color::Black,
+            modifiers: vec!()
         },
         Tile::Wall => CanvasSymbol {
             character: '#',
-            color: Color::Rgb(20, 20, 20),
-            face: Effect::Simple
+            foreground: Color::Black,
+            background: Color::White,
+            modifiers: vec!()
         }
     }
 }
 
-fn map_appearence_to_canvas_symbol(appearence: &Appearance) -> CanvasSymbol {
+fn get_canvas_symbol_for_appearence(appearence: &Appearance) -> CanvasSymbol {
     CanvasSymbol {
         character: appearence.icon,
-        color: appearence.color,
-        face: Effect::Simple
+        foreground: appearence.foreground,
+        background: appearence.background,
+        modifiers: appearence.modifiers.clone()
     }
 }
 
@@ -123,6 +133,7 @@ fn map_appearence_to_canvas_symbol(appearence: &Appearance) -> CanvasSymbol {
 /// Is None if the world space coordinate is not on the canvas (negative or OOB)
 ///
 /// # Arguements
+///
 /// * `xy` - (x, y) tuple in world space
 /// * `camera_center` - location in world space of where the camera is centered
 /// * `canvas_dimension` - (width, height) of the canvas
