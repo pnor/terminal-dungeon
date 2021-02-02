@@ -5,6 +5,7 @@ mod systems;
 mod game;
 mod views;
 
+use std::error::Error;
 use specs::Dispatcher;
 use specs::{DispatcherBuilder, World, WorldExt};
 
@@ -18,94 +19,117 @@ use component::*;
 use systems::*;
 use utility::text_canvas::{TextCanvas, CanvasSymbol};
 use game::Command;
+use game::InputManager;
 
 use std::rc::Rc;
 
 use std::thread;
 use std::time::Duration;
 
-use std::io::{self, Write};
+use std::io::{self, Write, Stdout};
 use tui::Terminal;
 use tui::backend::CrosstermBackend;
 use tui::widgets::{Widget, Block, Borders, Paragraph};
-use tui::layout::{Layout, Constraint, Direction};
+use tui::layout::{Rect, Layout, Constraint, Direction};
 
 use crossterm::terminal::{Clear, ClearType};
 
 extern crate nalgebra;
 use nalgebra::Vector2;
 
-fn main() {
-    test().unwrap();
-}
+fn main() -> Result<(), Box<dyn Error>> {
+    let mut terminal = setup_ui()?;
 
-fn test() -> Result<(), io::Error> {
-    let mut stdout = io::stdout();
+    let (mut world, mut dispatcher) = init_game();
+    register_components(&mut world);
+    add_resources(&mut world);
+    make_player(&mut world);
 
-    // clear the screen
-    write!(stdout, "{}", Clear(ClearType::All))?;
+    let input_manager = InputManager::new(Duration::from_millis(50));
+    let mut command_history: Vec<Command> = vec!();
 
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    for _ in 1..50 {
+        let command = input_manager.tick()?;
+        command_history.push(command.clone());
+        {
+            let mut command_res = world.write_resource::<Command>();
 
-    let map = map::test_room();
-    let mut canvas = TextCanvas::for_map(&map);
-    let character = CanvasSymbol {
-        character: '!',
-        foreground: Color::Red,
-        background: Color::Blue,
-        modifiers: vec!(),
-    };
+            match command {
+                Command::Tick(delta) => {
+                    *command_res = Command::None;
+                },
+                command => {
+                    *command_res = command;
+                }
+            }
+        }
 
-    canvas.set_symbol(Vector2::new(3, 3), character);
+        run_world(&mut world, &mut dispatcher);
+        draw_ui(&mut world, &mut terminal);
 
-    let canvas_ptr = Rc::new(canvas);
+        thread::sleep(Duration::from_millis(50));
+    }
 
-    for _ in 0..10 {
-        let canvas_ptr_clone = Rc::clone(&canvas_ptr);
-
-        terminal.draw(move |f| {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(1)
-                .constraints(
-                    [
-                        Constraint::Percentage(10),
-                        Constraint::Percentage(80),
-                        Constraint::Percentage(10)
-                    ].as_ref())
-                .split(f.size());
-
-            let block = Block::default()
-                .title("Block")
-                .borders(Borders::ALL);
-
-            f.render_widget(block, chunks[0]);
-
-            let map_text = (*canvas_ptr_clone).as_styled_text();
-            let map_display = Paragraph::new(map_text)
-                .block(
-                    Block::default()
-                        .title("map!")
-                        .borders(Borders::ALL)
-                );
-
-            f.render_widget(map_display, chunks[1]);
-        })?;
-
-        thread::sleep(Duration::from_millis(1000));
+    println!("");
+    println!("the result:");
+    for command in command_history {
+        match command {
+            Command::Down => println!("v"),
+            Command::Up => println!("^"),
+            Command::Left => println!("<-"),
+            Command::Right => println!("->"),
+            Command::Tick(_) => println!(":"),
+            Command::None => println!("X")
+        }
     }
 
     Ok(())
 }
 
-fn init_game() {
+fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, io::Error> {
+    let stdout = io::stdout();
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    terminal.clear();
+
+    Ok(terminal)
+}
+
+fn draw_ui(world: &mut World, terminal: &mut Terminal<CrosstermBackend<Stdout>>) {
+    let canvas = world.read_resource::<TextCanvas>();
+
+    terminal.clear();
+    terminal.draw(move |f| {
+        let map_text = (*canvas).as_styled_text();
+        let map_display = Paragraph::new(map_text)
+            .block(
+                Block::default()
+                    .title("map!")
+                    .borders(Borders::ALL)
+            );
+
+        let (width, height) = (*canvas).dimensions();
+        let rec = Rect::new(0, 0, width as u16, height as u16);
+
+        f.render_widget(map_display, rec);
+    });
+}
+
+fn clear_screen(stdout: &mut Stdout) {
+    write!(stdout, "{}", Clear(ClearType::All));
+}
+
+fn init_game<'a>() -> (World, Dispatcher<'a, 'a>) {
     let mut world = World::new();
 
     register_components(&mut world);
     add_resources(&mut world);
     make_player(&mut world);
     let mut dispatch = setup_dispatch();
+
+    (world, dispatch)
 }
 
 fn register_components(world: &mut World) {
@@ -153,3 +177,5 @@ fn run_world(world: &mut World, dispatcher: &mut Dispatcher) {
     dispatcher.dispatch(&world);
     world.maintain();
 }
+
+fn setup_input() {}

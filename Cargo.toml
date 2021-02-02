@@ -11,3 +11,6 @@ crossterm = "0.18"
 tui = { version = "0.14", default-features = false, features = ['crossterm'] }
 specs = { version = "0.16.1", features = ["specs-derive"] }
 nalgebra = "0.24.0"
+
+[dev-dependencies]
+enigo = "0.0.14"
