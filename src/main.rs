@@ -32,12 +32,17 @@ use tui::backend::CrosstermBackend;
 use tui::widgets::{Widget, Block, Borders, Paragraph};
 use tui::layout::{Rect, Layout, Constraint, Direction};
 
-use crossterm::terminal::{Clear, ClearType};
+use crossterm::terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode};
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::event::EnableMouseCapture;
 
 extern crate nalgebra;
 use nalgebra::Vector2;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    enable_raw_mode()?;
+
     let mut terminal = setup_ui()?;
 
     let (mut world, mut dispatcher) = init_game();
@@ -45,12 +50,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     add_resources(&mut world);
     make_player(&mut world);
 
-    let input_manager = InputManager::new(Duration::from_millis(50));
-    let mut command_history: Vec<Command> = vec!();
+    let input_manager = InputManager::new(Duration::from_millis(16));
 
-    for _ in 1..50 {
+    for _ in 1..400 {
         let command = input_manager.tick()?;
-        command_history.push(command.clone());
         {
             let mut command_res = world.write_resource::<Command>();
 
@@ -67,27 +70,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         run_world(&mut world, &mut dispatcher);
         draw_ui(&mut world, &mut terminal);
 
-        thread::sleep(Duration::from_millis(50));
+        // thread::sleep(Duration::from_millis(50));
     }
 
-    println!("");
-    println!("the result:");
-    for command in command_history {
-        match command {
-            Command::Down => println!("v"),
-            Command::Up => println!("^"),
-            Command::Left => println!("<-"),
-            Command::Right => println!("->"),
-            Command::Tick(_) => println!(":"),
-            Command::None => println!("X")
-        }
-    }
+    disable_raw_mode()?;
 
     Ok(())
 }
 
 fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, io::Error> {
-    let stdout = io::stdout();
+    let mut stdout = io::stdout();
+
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -100,7 +94,6 @@ fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, io::Error> {
 fn draw_ui(world: &mut World, terminal: &mut Terminal<CrosstermBackend<Stdout>>) {
     let canvas = world.read_resource::<TextCanvas>();
 
-    terminal.clear();
     terminal.draw(move |f| {
         let map_text = (*canvas).as_styled_text();
         let map_display = Paragraph::new(map_text)

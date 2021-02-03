@@ -139,6 +139,11 @@ mod test {
         CEvent::Key(KeyEvent::from(KeyCode::Char(letter)))
     }
 
+    /// Returns `Event<CEvent>` corresponding to keyboard input character
+    fn key_event(letter: char) -> InputEvent {
+        Event::Input(crossterm_key(letter))
+    }
+
     /// Removes all `Event::Tick` from `events`, leaving just input events
     fn remove_ticks(events: Vec<InputEvent>) -> Vec<InputEvent> {
         events.into_iter().filter_map(|ev: InputEvent| {
@@ -224,13 +229,10 @@ mod test {
         let results = get_crossterm_events(&input_manager.rx);
         let no_ticks = remove_ticks(results);
 
-        let a_key = Event::Input(crossterm_key('a'));
-        let b_key = Event::Input(crossterm_key('b'));
-        let c_key = Event::Input(crossterm_key('c'));
         let has_proper_keys =
-            has_event(&no_ticks, &a_key) &&
-            has_event(&no_ticks, &b_key) &&
-            has_event(&no_ticks, &c_key);
+            has_event(&no_ticks, &key_event('a')) &&
+            has_event(&no_ticks, &key_event('b')) &&
+            has_event(&no_ticks, &key_event('c'));
 
 
         assert!(has_proper_keys);
@@ -238,4 +240,33 @@ mod test {
         tear_down()?;
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn test_key_order() -> Result<(), Box<dyn Error>> {
+        setup()?;
+        let mut enigo = Enigo::new();
+
+        let input_rate = Duration::from_millis(16);
+        let input_manager = InputManager::new(Duration::from_millis(16));
+
+        thread::sleep(input_rate);
+        enigo.key_down(Key::Layout('1'));
+        enigo.key_down(Key::Layout('2'));
+        enigo.key_down(Key::Layout('3'));
+        thread::sleep(input_rate);
+
+        let results = get_crossterm_events(&input_manager.rx);
+        let no_ticks = remove_ticks(results);
+
+        let first_is_first = no_ticks[0] == key_event('1');
+        let second_is_second = no_ticks[1] == key_event('2');
+        let third_is_third = no_ticks[2] == key_event('3');
+
+        assert!(first_is_first && second_is_second && third_is_third);
+
+        tear_down()?;
+        Ok(())
+    }
+
 }
