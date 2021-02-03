@@ -105,12 +105,26 @@ mod test {
     use serial_test::serial;
     use std::sync::mpsc::Receiver;
     use super::*;
-    use std::io;
     use enigo::*;
     use std::time::Duration;
 
+    type InputEvent = Event<CEvent>;
+
+    /// Sets up the terminal for input testing
+    fn setup() -> Result<(), Box<dyn Error>> {
+        clear_inputs();
+        enable_raw_mode()?;
+        Ok(())
+    }
+
+    /// Cleans up the terminal after input testing
+    fn tear_down() -> Result<(), Box<dyn Error>> {
+        disable_raw_mode()?;
+        Ok(())
+    }
+
     /// Return a vector of all Crossterm Events received by the `Receiver`
-    fn get_crossterm_events(rx: &Receiver<Event<CEvent>>) -> Vec<Event<CEvent>> {
+    fn get_crossterm_events(rx: &Receiver<InputEvent>) -> Vec<InputEvent> {
         let mut results = vec!();
 
         while let Ok(command) = rx.try_recv() {
@@ -125,14 +139,22 @@ mod test {
         CEvent::Key(KeyEvent::from(KeyCode::Char(letter)))
     }
 
-    fn has_event<'a, I>(events: &I, item: &Event<CEvent>) -> bool
-    where I: Iterator<Item = &'a Event<CEvent>>
-    {
-        true
+    /// Removes all `Event::Tick` from `events`, leaving just input events
+    fn remove_ticks(events: Vec<InputEvent>) -> Vec<InputEvent> {
+        events.into_iter().filter_map(|ev: InputEvent| {
+            match ev {
+                Event::Tick => None,
+                event => Some(event)
+            }
+        }).collect::<Vec<InputEvent>>()
+    }
+
+    /// Returns true if `events` contains `item`
+    fn has_event(events: &Vec<InputEvent>, item: &InputEvent) -> bool {
+        events.iter().any(|ev: &InputEvent| *ev == *item)
     }
 
     /// Reads all events until there are none left
-    ///
     /// - `timeout` is the longest to wait for any event
     fn clear_inputs() {
         while event::poll(Duration::from_millis(100)).unwrap() {
@@ -143,93 +165,77 @@ mod test {
     #[test]
     #[serial]
     fn test_simple_input() -> Result<(), Box<dyn Error>> {
-        clear_inputs();
-        enable_raw_mode()?;
+        setup()?;
+
         let mut enigo = Enigo::new();
 
-        let input_manager = InputManager::new(Duration::from_millis(16));
+        let input_rate = Duration::from_millis(16);
+        let input_manager = InputManager::new(input_rate);
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('k'));
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(input_rate);
 
         let results = get_crossterm_events(&input_manager.rx);
         let key_pressed = crossterm_key('k');
         assert!(results.contains(&Event::Input(key_pressed)));
 
-        disable_raw_mode()?;
+        tear_down()?;
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_no_input() -> Result<(), Box<dyn Error>> {
-        clear_inputs();
-        enable_raw_mode()?;
+        setup()?;
 
-        let input_manager = InputManager::new(Duration::from_millis(16));
+        let input_rate = Duration::from_millis(16);
+        let input_manager = InputManager::new(input_rate);
 
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(input_rate);
 
         let results = get_crossterm_events(&input_manager.rx);
-        for res in &results {
-            match res {
-                Event::Tick => println!("..."),
-                Event::Input(e) => {
-                    match e {
-                        CEvent::Key(key) => println!("key: {:?}", key.code),
-                            _ => println!("?")
-                    }
-                    // println!("input")
-                }
-            }
-        }
-        let all_ticks = results.into_iter().all(|ev: Event<CEvent>| {
+        let all_ticks = results.into_iter().all(|ev: InputEvent| {
             ev == Event::Tick
         });
         assert!(all_ticks);
 
-        disable_raw_mode()?;
+        tear_down()?;
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_multiple_keys() -> Result<(), Box<dyn Error>> {
-        clear_inputs();
-        enable_raw_mode()?;
+        setup()?;
         let mut enigo = Enigo::new();
 
+        let input_rate = Duration::from_millis(16);
         let input_manager = InputManager::new(Duration::from_millis(16));
 
-        thread::sleep(Duration::from_millis(20));
+        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('a'));
-        thread::sleep(Duration::from_millis(20));
+        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('b'));
-        thread::sleep(Duration::from_millis(20));
+        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('c'));
+        thread::sleep(input_rate);
 
         let results = get_crossterm_events(&input_manager.rx);
-        let filtered_results = results.iter().filter_map(|ev: &Event<CEvent>| {
-            match ev {
-                Event::Tick => None,
-                event => Some(event)
-            }
-        });
+        let no_ticks = remove_ticks(results);
 
         let a_key = Event::Input(crossterm_key('a'));
         let b_key = Event::Input(crossterm_key('b'));
         let c_key = Event::Input(crossterm_key('c'));
-
         let has_proper_keys =
-            has_event(&filtered_results, &a_key) &&
-            has_event(&filtered_results, &b_key) &&
-            has_event(&filtered_results, &c_key);
+            has_event(&no_ticks, &a_key) &&
+            has_event(&no_ticks, &b_key) &&
+            has_event(&no_ticks, &c_key);
 
 
         assert!(has_proper_keys);
 
-        disable_raw_mode()?;
+        tear_down()?;
         Ok(())
     }
 }
