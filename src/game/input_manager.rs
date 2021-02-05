@@ -1,9 +1,5 @@
-use crate::game::Command;
-use crossterm::{
-    event::{self, Event as CEvent, KeyCode, KeyEvent},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use crate::game::{GameTick, Command};
+use crossterm::event::{self, Event as CEvent, KeyCode, KeyEvent};
 use std::{
     error::Error,
     sync::mpsc,
@@ -11,10 +7,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Abstraction that tracks time between the last input event and Crossterm Events
 #[derive(PartialEq)]
 enum Event<I> {
-    Input(I),
-    Tick,
+    Input(Duration, I),
+    Tick(Duration),
 }
 
 /// Manages user input by polling on another thread
@@ -49,18 +46,21 @@ impl InputManager {
                     .checked_sub(last_tick.elapsed())
                     .unwrap_or_else(|| Duration::from_secs(0));
 
+                // if has event, send it
                 if event::poll(timeout).unwrap() {
+                    let time_since_last_tick = Instant::now() - last_tick;
                     let event = match event::read() {
                         Ok(result) => result,
                         _ => return
                     };
-                    if let Err(_) = sx.send(Event::Input(event)) {
+                    if let Err(_) = sx.send(Event::Input(time_since_last_tick, event)) {
                         return
                     }
                 }
 
+                // Send a Tick since `tick_rate` has passed
                 if last_tick.elapsed() >= tick_rate {
-                    match sx.send(Event::Tick) {
+                    match sx.send(Event::Tick(tick_rate)) {
                         Ok(()) => last_tick = Instant::now(),
                         _ => return
                     };
@@ -70,30 +70,34 @@ impl InputManager {
     }
 
     /// Blocks until getting an input
-    pub fn tick(&self) -> Result<Command, Box<dyn Error>> {
-        let command = match self.rx.recv()? {
-            Event::Input(event) => Self::match_crossterm_event(event),
-            Event::Tick => Command::Tick(self.tick_rate)
+    pub fn tick(&self) -> Result<GameTick, Box<dyn Error>> {
+        let game_tick = match self.rx.recv()? {
+            Event::Input(deltatime, event) => Self::match_crossterm_event(deltatime, event),
+            Event::Tick(deltatime) => GameTick::Tick(deltatime)
         };
 
-        Ok(command)
+        Ok(game_tick)
     }
 
-    fn match_crossterm_event(event: CEvent) -> Command {
+    fn match_crossterm_event(deltatime: Duration, event: CEvent) -> GameTick {
         match event {
-            CEvent::Key(key) => Self::match_key_event(key),
-            CEvent::Mouse(_) => Command::None,
-            CEvent::Resize(_, _) => Command::None
+            CEvent::Key(key) => {
+                let command = Self::match_key_event(key);
+                GameTick::Command(deltatime, command)
+            },
+            CEvent::Mouse(_) => GameTick::Tick(deltatime), // TODO replace
+            CEvent::Resize(_, _) => GameTick::Tick(deltatime) // TODO replace
         }
     }
 
+    // TODO rename
     fn match_key_event(key: KeyEvent) -> Command {
         match key.code {
             KeyCode::Char('k') => Command::Up,
             KeyCode::Char('j') => Command::Down,
             KeyCode::Char('h') => Command::Left,
             KeyCode::Char('l') => Command::Right,
-            _ => Command::None
+            _ => Command::Up
         }
     }
 

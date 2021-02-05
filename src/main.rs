@@ -18,8 +18,7 @@ use entities::{component, factory};
 use component::*;
 use systems::*;
 use utility::text_canvas::{TextCanvas, CanvasSymbol};
-use game::Command;
-use game::InputManager;
+use game::{Command, InputManager, GameTick};
 
 use std::rc::Rc;
 
@@ -37,9 +36,6 @@ use crossterm::execute;
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::event::EnableMouseCapture;
 
-extern crate nalgebra;
-use nalgebra::Vector2;
-
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
 
@@ -55,22 +51,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     for _ in 1..400 {
         let command = input_manager.tick()?;
         {
-            let mut command_res = world.write_resource::<Command>();
-
-            match command {
-                Command::Tick(delta) => {
-                    *command_res = Command::None;
-                },
-                command => {
-                    *command_res = command;
-                }
-            }
+            let mut command_res = world.write_resource::<GameTick>();
+            *command_res = command;
         }
 
         run_world(&mut world, &mut dispatcher);
         draw_ui(&mut world, &mut terminal);
-
-        // thread::sleep(Duration::from_millis(50));
     }
 
     disable_raw_mode()?;
@@ -78,9 +64,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, io::Error> {
+fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn Error>> {
     let mut stdout = io::stdout();
 
+    enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 
     let backend = CrosstermBackend::new(stdout);
@@ -141,7 +128,7 @@ fn add_resources(world: &mut World) {
 
     world.insert(map);
 
-    world.insert(Command::None);
+    world.insert(GameTick::default());
 }
 
 fn initialize_map() -> Map {
@@ -170,5 +157,3 @@ fn run_world(world: &mut World, dispatcher: &mut Dispatcher) {
     dispatcher.dispatch(&world);
     world.maintain();
 }
-
-fn setup_input() {}
