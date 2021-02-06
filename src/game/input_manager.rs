@@ -8,7 +8,7 @@ use std::{
 };
 
 /// Abstraction that tracks time between the last input event and Crossterm Events
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum Event<I> {
     Input(Duration, I),
     Tick(Duration),
@@ -106,36 +106,91 @@ impl InputManager {
 
 #[cfg(test)]
 mod test {
-    use serial_test::serial;
-    use std::sync::mpsc::Receiver;
     use super::*;
+    use serial_test::serial;
+    use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
     use enigo::*;
+    use std::sync::mpsc::{Receiver};
     use std::time::Duration;
+    use std::fmt;
 
     type InputEvent = Event<CEvent>;
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    /// Error for all timeout events
+    #[derive(Debug, Clone)]
+    struct InputTimeoutError(Duration);
+
+    impl Error for InputTimeoutError {}
+
+    impl fmt::Display for InputTimeoutError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "Timed out when waiting for input (waited for over {:?})", self.0)
+        }
+    }
 
     /// Sets up the terminal for input testing
-    fn setup() -> Result<(), Box<dyn Error>> {
+    fn setup() -> TestResult {
         clear_inputs();
         enable_raw_mode()?;
         Ok(())
     }
 
     /// Cleans up the terminal after input testing
-    fn tear_down() -> Result<(), Box<dyn Error>> {
+    fn tear_down() -> TestResult {
         disable_raw_mode()?;
         Ok(())
     }
 
-    /// Return a vector of all Crossterm Events received by the `Receiver`
-    fn get_crossterm_events(rx: &Receiver<InputEvent>) -> Vec<InputEvent> {
-        let mut results = vec!();
+    /// Shorter to call wrapper of `get_input_manager_events`
+    fn get_input_events(rx: &Receiver<InputEvent>, number_events: u32) -> Result<Vec<InputEvent>, InputTimeoutError> {
+        let single_event_timeout: Duration = Duration::from_secs(1);
+        let total_timeout: Duration = Duration::from_secs(5);
 
-        while let Ok(command) = rx.try_recv() {
-            results.push(command);
+        get_input_manager_events(rx, number_events, single_event_timeout, total_timeout)
+    }
+
+    /// Return a vector of all Crossterm Events received by the `Receiver` until `number_events` non-tick events were
+    /// received
+    ///
+    /// - `number_events`: total number of NON-TICK events to wait on
+    /// - `timeout`: longest time to wait on any one event
+    /// - `total_timeout`: longest time to wait to receive all `number_events` events
+    ///
+    fn get_input_manager_events(
+        rx: &Receiver<InputEvent>,
+        number_events: u32,
+        timeout: Duration,
+        total_timeout: Duration
+    ) -> Result<Vec<InputEvent>, InputTimeoutError> {
+        let mut results = vec!();
+        let mut events_so_far = 0;
+        let mut accum_time = Duration::from_millis(0);
+
+        while events_so_far < number_events {
+            if accum_time > total_timeout {
+                return Err(InputTimeoutError(accum_time));
+            }
+
+            let new_event = match rx.recv_timeout(timeout) {
+                Ok(event) => event,
+                Err(_) => return Err(InputTimeoutError(timeout))
+            };
+
+            match new_event {
+                Event::Input(delta, _) => {
+                    events_so_far += 1;
+                    accum_time += delta;
+                },
+                Event::Tick(delta) => {
+                    accum_time += delta;
+                }
+            }
+
+            results.push(new_event);
         }
 
-        results
+        Ok(results)
     }
 
     /// Returns standard Crossterm Key Event from a character (doesn't include Alt/Ctrl/etc.)
@@ -145,22 +200,31 @@ mod test {
 
     /// Returns `Event<CEvent>` corresponding to keyboard input character
     fn key_event(letter: char) -> InputEvent {
-        Event::Input(crossterm_key(letter))
+        Event::Input(Duration::from_millis(0), crossterm_key(letter))
+    }
+
+    /// Compares `Event`s ignoring deltatime
+    fn compare(former: &InputEvent, latter: &InputEvent) -> bool {
+        match (former, latter) {
+            (Event::Tick(_), Event::Tick(_)) => true,
+            (Event::Input(_, former_key), Event::Input(_, latter_key)) => former_key == latter_key,
+            _ => false
+        }
     }
 
     /// Removes all `Event::Tick` from `events`, leaving just input events
     fn remove_ticks(events: Vec<InputEvent>) -> Vec<InputEvent> {
         events.into_iter().filter_map(|ev: InputEvent| {
             match ev {
-                Event::Tick => None,
+                Event::Tick(_) => None,
                 event => Some(event)
             }
         }).collect::<Vec<InputEvent>>()
     }
 
     /// Returns true if `events` contains `item`
-    fn has_event(events: &Vec<InputEvent>, item: &InputEvent) -> bool {
-        events.iter().any(|ev: &InputEvent| *ev == *item)
+    fn has_event(events: &Vec<InputEvent>, input_event: &InputEvent) -> bool {
+        events.iter().any(|event| compare(&event, input_event))
     }
 
     /// Reads all events until there are none left
@@ -173,21 +237,19 @@ mod test {
 
     #[test]
     #[serial]
-    fn test_simple_input() -> Result<(), Box<dyn Error>> {
+    fn test_simple_input() -> TestResult {
         setup()?;
 
         let mut enigo = Enigo::new();
 
-        let input_rate = Duration::from_millis(16);
-        let input_manager = InputManager::new(input_rate);
+        let input_manager = InputManager::new(Duration::from_millis(16));
 
-        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('k'));
-        thread::sleep(input_rate);
 
-        let results = get_crossterm_events(&input_manager.rx);
-        let key_pressed = crossterm_key('k');
-        assert!(results.contains(&Event::Input(key_pressed)));
+        let results = get_input_events(&input_manager.rx, 1)?;
+
+        let key_pressed = key_event('k');
+        assert!(has_event(&results, &key_pressed));
 
         tear_down()?;
         Ok(())
@@ -195,18 +257,18 @@ mod test {
 
     #[test]
     #[serial]
-    fn test_no_input() -> Result<(), Box<dyn Error>> {
+    fn test_no_input() -> TestResult {
         setup()?;
 
         let input_rate = Duration::from_millis(16);
         let input_manager = InputManager::new(input_rate);
 
-        thread::sleep(input_rate);
+        let results = get_input_events(&input_manager.rx, 0)?;
 
-        let results = get_crossterm_events(&input_manager.rx);
         let all_ticks = results.into_iter().all(|ev: InputEvent| {
-            ev == Event::Tick
+            ev == Event::Tick(Duration::from_millis(0))
         });
+
         assert!(all_ticks);
 
         tear_down()?;
@@ -215,22 +277,19 @@ mod test {
 
     #[test]
     #[serial]
-    fn test_multiple_keys() -> Result<(), Box<dyn Error>> {
+    fn test_multiple_keys() -> TestResult {
         setup()?;
         let mut enigo = Enigo::new();
 
         let input_rate = Duration::from_millis(16);
         let input_manager = InputManager::new(Duration::from_millis(16));
 
-        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('a'));
-        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('b'));
-        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('c'));
-        thread::sleep(input_rate);
 
-        let results = get_crossterm_events(&input_manager.rx);
+        let results = get_input_events(&input_manager.rx, 3)?;
+
         let no_ticks = remove_ticks(results);
 
         let has_proper_keys =
@@ -247,25 +306,22 @@ mod test {
 
     #[test]
     #[serial]
-    fn test_key_order() -> Result<(), Box<dyn Error>> {
+    fn test_key_order() -> TestResult {
         setup()?;
         let mut enigo = Enigo::new();
 
-        let input_rate = Duration::from_millis(16);
         let input_manager = InputManager::new(Duration::from_millis(16));
 
-        thread::sleep(input_rate);
         enigo.key_down(Key::Layout('1'));
         enigo.key_down(Key::Layout('2'));
         enigo.key_down(Key::Layout('3'));
-        thread::sleep(input_rate);
 
-        let results = get_crossterm_events(&input_manager.rx);
+        let results = get_input_events(&input_manager.rx, 3)?;
         let no_ticks = remove_ticks(results);
 
-        let first_is_first = no_ticks[0] == key_event('1');
-        let second_is_second = no_ticks[1] == key_event('2');
-        let third_is_third = no_ticks[2] == key_event('3');
+        let first_is_first = compare(&no_ticks[0], &key_event('1'));
+        let second_is_second = compare(&no_ticks[1], &key_event('2'));
+        let third_is_third = compare(&no_ticks[2], &key_event('3'));
 
         assert!(first_is_first && second_is_second && third_is_third);
 
