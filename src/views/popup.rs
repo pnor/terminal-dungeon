@@ -11,16 +11,13 @@ pub trait Popup {
     // Instantiates new popup instance
     fn new() -> Self where Self:Sized;
 
-    /// Setups up the popup for rendering
-    fn setup(&self);
-
     /// Renders the screen onto the terminal
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
+    fn render(&mut self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
 
     /// Returns `Rect` representing where on screen it'll draw its contents
     fn draw_location(&self) -> Rect;
 
     /// Performs clean up when screen is dropped
-    fn tear_down(&self);
+    fn tear_down(&mut self) {}
 
 }

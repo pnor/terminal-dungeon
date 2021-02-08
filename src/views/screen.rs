@@ -11,13 +11,10 @@ pub trait Screen {
     /// Instantiates new instance of this screen
     fn new() -> Self where Self:Sized;
 
-    /// Sets up the screen for rendering
-    fn setup(&self);
-
     /// Renders the screen onto the terminal
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
+    fn render(&mut self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
 
     /// Performs clean up when screen is dropped
-    fn tear_down(&self);
+    fn tear_down(&mut self) {}
 
 }

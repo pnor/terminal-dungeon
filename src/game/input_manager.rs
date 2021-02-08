@@ -161,9 +161,11 @@ mod test {
     impl Error for InputTimeoutError {}
 
     impl fmt::Display for InputTimeoutError {
+
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "Timed out when waiting for input (waited for over {:?})", self.0)
         }
+
     }
 
     /// Convenienve method for creating the InputManager

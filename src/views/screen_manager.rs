@@ -1,3 +1,4 @@
+use std::error::Error;
 use crate::game::GameTick;
 use crate::game::input_manager::InputManager;
 use crate::game::input_manager::InputManagerError;
@@ -5,10 +6,10 @@ use crossterm::event::EnableMouseCapture;
 use crossterm::execute;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::enable_raw_mode;
-use std::rc::Rc;
 use std::io::{Stdout, Write};
 use std::io;
 use std::time::Duration;
+use std::fmt;
 use super::Popup;
 use super::Screen;
 use tui::Terminal as TuiTerminal;
@@ -25,6 +26,20 @@ pub enum ScreenManagerError {
     IoError(io::Error),
     CrosstermError(crossterm::ErrorKind),
     InputManagerError(InputManagerError)
+}
+
+impl Error for ScreenManagerError {}
+
+impl fmt::Display for ScreenManagerError {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        write!(
+            f,
+            "Encountered error when using the Screen Manager: {:?}",
+            self
+        )
+    }
+
 }
 
 impl From<io::Error> for ScreenManagerError {
@@ -94,12 +109,14 @@ impl ScreenManager {
         Ok(terminal)
     }
 
+    /// Starts the main render loop, which polls for input and sends the deltatime and user input to the
+    /// screens/popups
     pub fn start_main_loop(&mut self) -> Result<()> {
         while !self.should_quit {
             let tick = self.input_manager.tick()?;
+            let screens = &mut self.screens;
+            let popups = &mut self.popups;
 
-            let screens = &self.screens;
-            let popups = &self.popups;
             self.terminal.draw(move |f| {
                 render(f, screens, popups, tick);
             })?;
@@ -108,27 +125,51 @@ impl ScreenManager {
         Ok(())
     }
 
+    /// Push a new `screen` to the top of the Screen stack
+    pub fn push_screen(&mut self, screen: Box<dyn Screen>) {
+        self.screens.push(screen);
+    }
+
+    pub fn push_popup(&mut self, popup: Box<dyn Popup>) {
+        self.popups.push(popup);
+    }
+
+}
+
+impl Drop for ScreenManager {
+
+    /// Calls tear_down on all screens and popups before they are dropped
+    fn drop(&mut self) {
+        for screen in &mut self.screens {
+            screen.tear_down();
+        }
+
+        for popup in &mut self.popups {
+            popup.tear_down();
+        }
+    }
+
 }
 
 /// Renders the screen (popups and screen stack)
-fn render(f: &mut Frame, screens: &Vec<Box<dyn Screen>>, popups: &Vec<Box<dyn Popup>>, tick: GameTick) {
+fn render(f: &mut Frame, screens: &mut Vec<Box<dyn Screen>>, popups: &mut Vec<Box<dyn Popup>>, tick: GameTick) {
     let tick = render_popups(f, popups, tick);
     render_screens(f, screens, tick);
 }
 
 /// Renders the topmost screen in the screen stack
-fn render_screens(f: &mut Frame, screens: &Vec<Box<dyn Screen>>, tick: GameTick) {
-    if let Some(top_screen) = screens.first() {
+fn render_screens(f: &mut Frame, screens: &mut Vec<Box<dyn Screen>>, tick: GameTick) {
+    if let Some(top_screen) = screens.first_mut() {
         top_screen.render(f, tick);
     }
 }
 
 /// Renders each of the popups, only allowing the topmost popup to get commands
-fn render_popups(f: &mut Frame, popups: &Vec<Box<dyn Popup>>, tick: GameTick) -> GameTick {
+fn render_popups(f: &mut Frame, popups: &mut Vec<Box<dyn Popup>>, tick: GameTick) -> GameTick {
     let mut tick = tick;
 
     for i in (0..popups.len()).rev() {
-        let popup_screen = &popups[i];
+        let popup_screen = &mut popups[i];
 
         if i == 0 {
             // Render topmost popup with the full tick + command
@@ -154,4 +195,117 @@ fn remove_input_from_tick(tick: GameTick) -> GameTick {
         GameTick::Command(deltatime, _) => GameTick::Tick(deltatime),
         tick => tick,
     }
+}
+
+#[cfg(test)]
+mod test {
+    use std::error::Error;
+    use std::sync::mpsc;
+    use std::rc::Rc;
+    use super::*;
+
+    type TestResult = std::result::Result<(), Box<dyn Error>>;
+
+    struct TestScreen {
+        pub data: String,
+        sx: mpsc::Sender<bool>,
+        pub rx_rc: Rc<mpsc::Receiver<bool>>
+    }
+
+    impl Screen for TestScreen {
+
+        fn new() -> Self {
+            let (sx, rx) = mpsc::channel();
+            let rx_rc = Rc::new(rx);
+
+            TestScreen {
+                data: String::from(""),
+                sx,
+                rx_rc
+            }
+        }
+
+        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
+            self.data = String::from("rendering")
+        }
+
+        fn tear_down(&mut self) {
+            self.data = String::from("is torn down");
+            self.sx.send(true).unwrap();
+        }
+
+    }
+
+    struct TestPopup {
+        pub data: String,
+        sx: mpsc::Sender<bool>,
+        pub rx_rc: Rc<mpsc::Receiver<bool>>
+    }
+
+    impl Popup for TestPopup {
+
+        fn new() -> Self {
+            let (sx, rx) = mpsc::channel();
+            let rx_rc = Rc::new(rx);
+
+            TestPopup {
+                data: String::from(""),
+                sx,
+                rx_rc
+            }
+        }
+
+        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
+            self.data = String::from("rendering")
+        }
+
+        fn draw_location(&self) -> tui::layout::Rect {
+            tui::layout::Rect::new(0, 0, 10, 10)
+        }
+
+        fn tear_down(&mut self) {
+            self.data = String::from("is torn down");
+            self.sx.send(true).unwrap();
+        }
+
+    }
+
+
+    #[test]
+    fn test_new() -> TestResult {
+        let _ = ScreenManager::new()?;
+        Ok(())
+    }
+
+    // #[test] TODO
+    fn test_push_screen() -> TestResult {
+        let screen_manager = ScreenManager::new()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_tear_down_called() -> TestResult {
+        let test_screen = TestScreen::new();
+        let test_screen_rx = test_screen.rx_rc.clone();
+
+        let test_popup = TestPopup::new();
+        let test_popup_rx = test_popup.rx_rc.clone();
+
+        {
+            let mut screen_manager = ScreenManager::new()?;
+
+            screen_manager.push_screen(Box::new(test_screen));
+            screen_manager.push_popup(Box::new(test_popup));
+        }
+
+        // Screen manager is dropped
+        assert_eq!(test_screen_rx.try_recv(), Ok(true));
+        assert_eq!(test_popup_rx.try_recv(), Ok(true));
+
+        Ok(())
+    }
+
+
+
 }
