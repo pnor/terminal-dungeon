@@ -18,7 +18,8 @@ use entities::{component, factory};
 use component::*;
 use systems::*;
 use utility::text_canvas::{TextCanvas, CanvasSymbol};
-use game::{Command, InputManager, GameTick};
+use game::{Command, GameTick};
+use game::input_manager::{InputManager, InputManagerError};
 
 use std::rc::Rc;
 
@@ -46,10 +47,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     add_resources(&mut world);
     make_player(&mut world);
 
-    let input_manager = InputManager::new(Duration::from_millis(16));
+    let input_manager = InputManager::new(Duration::from_millis(16), Duration::from_secs(1));
 
     for _ in 1..400 {
-        let command = input_manager.tick()?;
+        let command = input_manager.tick().unwrap();
         {
             let mut command_res = world.write_resource::<GameTick>();
             *command_res = command;

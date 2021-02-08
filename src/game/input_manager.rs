@@ -1,11 +1,44 @@
 use crate::game::{GameTick, Command};
 use crossterm::event::{self, Event as CEvent, KeyCode, KeyEvent};
 use std::{
-    error::Error,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
+
+type Result<T> = std::result::Result<T, InputManagerError>;
+
+/// Error for InputManager related errors
+#[derive(Debug)]
+pub enum InputManagerError {
+    CrosstermError(crossterm::ErrorKind),
+    RecvTimoutERror(mpsc::RecvTimeoutError),
+    SendError(mpsc::SendError<InputEvent>),
+}
+
+impl From<crossterm::ErrorKind> for InputManagerError {
+
+    fn from(error: crossterm::ErrorKind) -> Self {
+        Self::CrosstermError(error)
+    }
+}
+
+impl From<mpsc::RecvTimeoutError> for InputManagerError {
+
+    fn from(error: mpsc::RecvTimeoutError) -> Self {
+        Self::RecvTimoutERror(error)
+    }
+
+}
+
+impl From<mpsc::SendError<InputEvent>> for InputManagerError {
+
+    fn from(error: mpsc::SendError<InputEvent>) -> Self {
+        Self::SendError(error)
+    }
+
+}
+
 
 /// Abstraction that tracks time between the last input event and Crossterm Events
 #[derive(PartialEq, Debug)]
@@ -14,20 +47,27 @@ enum Event<I> {
     Tick(Duration),
 }
 
+type InputEvent = Event<CEvent>;
+
 /// Manages user input by polling on another thread
+/// Cleans up when this struct is dropped
 pub struct InputManager {
-    rx: mpsc::Receiver<Event<CEvent>>,
+    rx: mpsc::Receiver<InputEvent>,
+    /// How long until async thread sends a Event::Tick (max deltatime)
     tick_rate: Duration,
+    /// Longest time to wait for any 1 tick from the receiver
+    tick_timeout: Duration
 }
 
 impl InputManager {
 
     /// Creates `InputManager` and starts asynchronously polling user input
-    pub fn new(tick_rate: Duration) -> Self {
+    pub fn new(tick_rate: Duration, tick_timeout: Duration) -> Self {
         let (sx, rx) = mpsc::channel();
         let input_manager = InputManager {
             rx,
-            tick_rate
+            tick_rate,
+            tick_timeout
         };
 
         input_manager.start_async_polling(sx);
@@ -35,9 +75,11 @@ impl InputManager {
         input_manager
     }
 
-    fn start_async_polling(&self, sx: mpsc::Sender<Event<CEvent>>) {
+    /// Starts the async thread that polls for input and returns ticks
+    /// Thread exits if any kind of Error is encountered when working with input
+    fn start_async_polling(&self, sx: mpsc::Sender<InputEvent>) {
         let tick_rate = self.tick_rate;
-        thread::spawn(move || {
+        thread::spawn(move || -> Result<()> {
             let mut last_tick = Instant::now();
 
             loop {
@@ -49,29 +91,24 @@ impl InputManager {
                 // if has event, send it
                 if event::poll(timeout).unwrap() {
                     let time_since_last_tick = Instant::now() - last_tick;
-                    let event = match event::read() {
-                        Ok(result) => result,
-                        _ => return
-                    };
-                    if let Err(_) = sx.send(Event::Input(time_since_last_tick, event)) {
-                        return
-                    }
+                    let event = event::read()?;
+                    sx.send(Event::Input(time_since_last_tick, event))?;
                 }
 
                 // Send a Tick since `tick_rate` has passed
                 if last_tick.elapsed() >= tick_rate {
-                    match sx.send(Event::Tick(tick_rate)) {
-                        Ok(()) => last_tick = Instant::now(),
-                        _ => return
-                    };
+                    sx.send(Event::Tick(tick_rate))?;
+                    last_tick = Instant::now();
                 }
             }
         });
     }
 
     /// Blocks until getting an input
-    pub fn tick(&self) -> Result<GameTick, Box<dyn Error>> {
-        let game_tick = match self.rx.recv()? {
+    pub fn tick(&self) -> Result<GameTick> {
+        let rx_result = self.rx.recv_timeout(self.tick_timeout)?;
+
+        let game_tick = match rx_result {
             Event::Input(deltatime, event) => Self::match_crossterm_event(deltatime, event),
             Event::Tick(deltatime) => GameTick::Tick(deltatime)
         };
@@ -113,9 +150,9 @@ mod test {
     use std::sync::mpsc::{Receiver};
     use std::time::Duration;
     use std::fmt;
+    use std::error::Error;
 
-    type InputEvent = Event<CEvent>;
-    type TestResult = Result<(), Box<dyn Error>>;
+    type TestResult = std::result::Result<(), Box<dyn Error>>;
 
     /// Error for all timeout events
     #[derive(Debug, Clone)]
@@ -127,6 +164,11 @@ mod test {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "Timed out when waiting for input (waited for over {:?})", self.0)
         }
+    }
+
+    /// Convenienve method for creating the InputManager
+    fn make_input_manager() -> InputManager {
+        InputManager::new(Duration::from_millis(16), Duration::from_secs(1))
     }
 
     /// Sets up the terminal for input testing
@@ -143,7 +185,10 @@ mod test {
     }
 
     /// Shorter to call wrapper of `get_input_manager_events`
-    fn get_input_events(rx: &Receiver<InputEvent>, number_events: u32) -> Result<Vec<InputEvent>, InputTimeoutError> {
+    fn get_input_events(
+        rx: &Receiver<InputEvent>,
+        number_events: u32
+    ) -> std::result::Result<Vec<InputEvent>, InputTimeoutError> {
         let single_event_timeout: Duration = Duration::from_secs(1);
         let total_timeout: Duration = Duration::from_secs(5);
 
@@ -162,7 +207,7 @@ mod test {
         number_events: u32,
         timeout: Duration,
         total_timeout: Duration
-    ) -> Result<Vec<InputEvent>, InputTimeoutError> {
+    ) -> std::result::Result<Vec<InputEvent>, InputTimeoutError> {
         let mut results = vec!();
         let mut events_so_far = 0;
         let mut accum_time = Duration::from_millis(0);
@@ -198,7 +243,7 @@ mod test {
         CEvent::Key(KeyEvent::from(KeyCode::Char(letter)))
     }
 
-    /// Returns `Event<CEvent>` corresponding to keyboard input character
+    /// Returns `InputEvent` corresponding to keyboard input character
     fn key_event(letter: char) -> InputEvent {
         Event::Input(Duration::from_millis(0), crossterm_key(letter))
     }
@@ -242,7 +287,7 @@ mod test {
 
         let mut enigo = Enigo::new();
 
-        let input_manager = InputManager::new(Duration::from_millis(16));
+        let input_manager = make_input_manager();
 
         enigo.key_down(Key::Layout('k'));
 
@@ -261,7 +306,7 @@ mod test {
         setup()?;
 
         let input_rate = Duration::from_millis(16);
-        let input_manager = InputManager::new(input_rate);
+        let input_manager = make_input_manager();
 
         let results = get_input_events(&input_manager.rx, 0)?;
 
@@ -282,7 +327,7 @@ mod test {
         let mut enigo = Enigo::new();
 
         let input_rate = Duration::from_millis(16);
-        let input_manager = InputManager::new(Duration::from_millis(16));
+        let input_manager = make_input_manager();
 
         enigo.key_down(Key::Layout('a'));
         enigo.key_down(Key::Layout('b'));
@@ -297,7 +342,6 @@ mod test {
             has_event(&no_ticks, &key_event('b')) &&
             has_event(&no_ticks, &key_event('c'));
 
-
         assert!(has_proper_keys);
 
         tear_down()?;
@@ -310,7 +354,7 @@ mod test {
         setup()?;
         let mut enigo = Enigo::new();
 
-        let input_manager = InputManager::new(Duration::from_millis(16));
+        let input_manager = make_input_manager();
 
         enigo.key_down(Key::Layout('1'));
         enigo.key_down(Key::Layout('2'));

@@ -1,28 +1,23 @@
+use std::io::Stdout;
+use tui::backend::Backend;
 use tui::backend::CrosstermBackend;
 use tui::Frame;
 use std::time::Duration;
+use crate::game::GameTick;
 
 /// Defines a primary view, that shows various widgets
-trait Screen {
+pub trait Screen {
 
     /// Instantiates new instance of this screen
-    fn new() -> Self;
+    fn new() -> Self where Self:Sized;
 
     /// Sets up the screen for rendering
     fn setup(&self);
 
     /// Renders the screen onto the terminal
-    fn render<B: Backend>(&self, frame: &mut Frame<B>, deltatime: Duration);
+    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
 
     /// Performs clean up when screen is dropped
     fn tear_down(&self);
-
-}
-
-impl<T: Drop> T {
-
-    fn drop(&mut self) {
-        self.tear_down()
-    }
 
 }
