@@ -130,8 +130,19 @@ impl ScreenManager {
         self.screens.push(screen);
     }
 
+    /// Pops a `Screen` from the Screen stack
+    pub fn pop_screen(&mut self) -> Option<Box<dyn Screen>> {
+        self.screens.pop()
+    }
+
+    /// Push a new `popup` to the top of the Popup stack
     pub fn push_popup(&mut self, popup: Box<dyn Popup>) {
         self.popups.push(popup);
+    }
+
+    /// Pops a `Popup` from the Popup stack
+    pub fn pop_popup(&mut self) -> Option<Box<dyn Popup>> {
+        self.popups.pop()
     }
 
 }
@@ -207,7 +218,6 @@ mod test {
     type TestResult = std::result::Result<(), Box<dyn Error>>;
 
     struct TestScreen {
-        pub data: String,
         sx: mpsc::Sender<bool>,
         pub rx_rc: Rc<mpsc::Receiver<bool>>
     }
@@ -219,25 +229,20 @@ mod test {
             let rx_rc = Rc::new(rx);
 
             TestScreen {
-                data: String::from(""),
                 sx,
                 rx_rc
             }
         }
 
-        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
-            self.data = String::from("rendering")
-        }
+        fn render(&mut self, frame: &mut Frame, tick: GameTick) { }
 
         fn tear_down(&mut self) {
-            self.data = String::from("is torn down");
             self.sx.send(true).unwrap();
         }
 
     }
 
     struct TestPopup {
-        pub data: String,
         sx: mpsc::Sender<bool>,
         pub rx_rc: Rc<mpsc::Receiver<bool>>
     }
@@ -249,27 +254,22 @@ mod test {
             let rx_rc = Rc::new(rx);
 
             TestPopup {
-                data: String::from(""),
                 sx,
                 rx_rc
             }
         }
 
-        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
-            self.data = String::from("rendering")
-        }
+        fn render(&mut self, frame: &mut Frame, tick: GameTick) { }
 
         fn draw_location(&self) -> tui::layout::Rect {
             tui::layout::Rect::new(0, 0, 10, 10)
         }
 
         fn tear_down(&mut self) {
-            self.data = String::from("is torn down");
             self.sx.send(true).unwrap();
         }
 
     }
-
 
     #[test]
     fn test_new() -> TestResult {
@@ -277,12 +277,78 @@ mod test {
         Ok(())
     }
 
-    // #[test] TODO
+    #[test]
     fn test_push_screen() -> TestResult {
-        let screen_manager = ScreenManager::new()?;
+        let mut screen_manager = ScreenManager::new()?;
+
+        let test_screen = TestScreen::new();
+        screen_manager.push_screen(Box::new(test_screen));
+
+        assert_eq!(screen_manager.screens.len(), 1);
 
         Ok(())
     }
+
+    #[test]
+    fn test_pop_screen() -> TestResult {
+        let mut screen_manager = ScreenManager::new()?;
+
+        let test_screen_1 = TestScreen::new();
+        let test_screen_2 = TestScreen::new();
+
+        let screen_1_rx_rc = test_screen_1.rx_rc.clone();
+
+        screen_manager.push_screen(Box::new(test_screen_2));
+        screen_manager.push_screen(Box::new(test_screen_1));
+
+        let mut popped = screen_manager.pop_screen().unwrap();
+
+        // Test pop changes length
+        assert_eq!(screen_manager.screens.len(), 1);
+
+        // Test popped thing is the top of stack (by checking the write popup changed)
+        popped.as_mut().tear_down();
+        assert_eq!(screen_1_rx_rc.try_recv(), Ok(true));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_push_popup() -> TestResult {
+        let mut screen_manager = ScreenManager::new()?;
+
+        let test_popup = TestPopup::new();
+        screen_manager.push_popup(Box::new(test_popup));
+
+        assert_eq!(screen_manager.popups.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pop_popup() -> TestResult {
+        let mut screen_manager = ScreenManager::new()?;
+
+        let test_popup_1 = TestPopup::new();
+        let test_popup_2 = TestPopup::new();
+
+        let popup_1_rx_rc = test_popup_1.rx_rc.clone();
+
+        screen_manager.push_popup(Box::new(test_popup_2));
+        screen_manager.push_popup(Box::new(test_popup_1));
+
+        let mut popped = screen_manager.pop_popup().unwrap();
+
+        // Test pop changes length
+        assert_eq!(screen_manager.popups.len(), 1);
+
+        // Test popped thing is the top of stack (by checking the write popup changed)
+        popped.as_mut().tear_down();
+        assert_eq!(popup_1_rx_rc.try_recv(), Ok(true));
+
+        Ok(())
+    }
+
 
     #[test]
     fn test_tear_down_called() -> TestResult {
@@ -302,6 +368,14 @@ mod test {
         // Screen manager is dropped
         assert_eq!(test_screen_rx.try_recv(), Ok(true));
         assert_eq!(test_popup_rx.try_recv(), Ok(true));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_render() -> TestResult {
+        let mut screen_manager = ScreenManager::new()?;
+        // TODO test render
 
         Ok(())
     }
