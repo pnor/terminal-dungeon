@@ -20,52 +20,6 @@ type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
 type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;
 type Result<T> = std::result::Result<T, ScreenManagerError>;
 
-/// Screen Manager general error
-#[derive(Debug)]
-pub enum ScreenManagerError {
-    IoError(io::Error),
-    CrosstermError(crossterm::ErrorKind),
-    InputManagerError(InputManagerError)
-}
-
-impl Error for ScreenManagerError {}
-
-impl fmt::Display for ScreenManagerError {
-
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
-        write!(
-            f,
-            "Encountered error when using the Screen Manager: {:?}",
-            self
-        )
-    }
-
-}
-
-impl From<io::Error> for ScreenManagerError {
-
-    fn from(error: io::Error) -> ScreenManagerError {
-        ScreenManagerError::IoError(error)
-    }
-
-}
-
-impl From<crossterm::ErrorKind> for ScreenManagerError {
-
-    fn from(error: crossterm::ErrorKind) -> ScreenManagerError {
-        ScreenManagerError::CrosstermError(error)
-    }
-
-}
-
-impl From<InputManagerError> for ScreenManagerError {
-
-    fn from(error: InputManagerError) -> ScreenManagerError {
-        ScreenManagerError::InputManagerError(error)
-    }
-
-}
-
 /// Manages screens and popups in the game, and controls which views get inputs
 pub struct ScreenManager {
     screens: Vec<Box<dyn Screen>>,
@@ -206,6 +160,52 @@ fn remove_input_from_tick(tick: GameTick) -> GameTick {
         GameTick::Command(deltatime, _) => GameTick::Tick(deltatime),
         tick => tick,
     }
+}
+
+/// Screen Manager general error
+#[derive(Debug)]
+pub enum ScreenManagerError {
+    IoError(io::Error),
+    CrosstermError(crossterm::ErrorKind),
+    InputManagerError(InputManagerError)
+}
+
+impl Error for ScreenManagerError {}
+
+impl fmt::Display for ScreenManagerError {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        write!(
+            f,
+            "Encountered error when using the Screen Manager: {:?}",
+            self
+        )
+    }
+
+}
+
+impl From<io::Error> for ScreenManagerError {
+
+    fn from(error: io::Error) -> ScreenManagerError {
+        ScreenManagerError::IoError(error)
+    }
+
+}
+
+impl From<crossterm::ErrorKind> for ScreenManagerError {
+
+    fn from(error: crossterm::ErrorKind) -> ScreenManagerError {
+        ScreenManagerError::CrosstermError(error)
+    }
+
+}
+
+impl From<InputManagerError> for ScreenManagerError {
+
+    fn from(error: InputManagerError) -> ScreenManagerError {
+        ScreenManagerError::InputManagerError(error)
+    }
+
 }
 
 #[cfg(test)]
@@ -379,7 +379,5 @@ mod test {
 
         Ok(())
     }
-
-
 
 }
