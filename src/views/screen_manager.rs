@@ -79,7 +79,7 @@ impl ScreenManager {
         Ok(())
     }
 
-    /// Push a new `screen` to the top of the Screen stack
+    /// Push a new `Screen` to the top of the Screen stack
     pub fn push_screen(&mut self, screen: Box<dyn Screen>) {
         self.screens.push(screen);
     }
@@ -89,7 +89,7 @@ impl ScreenManager {
         self.screens.pop()
     }
 
-    /// Push a new `popup` to the top of the Popup stack
+    /// Push a new `Popup` to the top of the Popup stack
     pub fn push_popup(&mut self, popup: Box<dyn Popup>) {
         self.popups.push(popup);
     }
@@ -213,13 +213,16 @@ mod test {
     use std::error::Error;
     use std::sync::mpsc;
     use std::rc::Rc;
+    use crate::game::Command;
     use super::*;
+
+    static DUMMY_TICK: GameTick = GameTick::Tick(Duration::from_secs(1));
 
     type TestResult = std::result::Result<(), Box<dyn Error>>;
 
     struct TestScreen {
-        sx: mpsc::Sender<bool>,
-        pub rx_rc: Rc<mpsc::Receiver<bool>>
+        sx: mpsc::Sender<GameTick>,
+        pub rx_rc: Rc<mpsc::Receiver<GameTick>>
     }
 
     impl Screen for TestScreen {
@@ -234,17 +237,19 @@ mod test {
             }
         }
 
-        fn render(&mut self, frame: &mut Frame, tick: GameTick) { }
+        fn render(&mut self, _: &mut Frame, tick: GameTick) {
+            self.sx.send(tick).unwrap();
+        }
 
         fn tear_down(&mut self) {
-            self.sx.send(true).unwrap();
+            self.sx.send(DUMMY_TICK).unwrap();
         }
 
     }
 
     struct TestPopup {
-        sx: mpsc::Sender<bool>,
-        pub rx_rc: Rc<mpsc::Receiver<bool>>
+        sx: mpsc::Sender<GameTick>,
+        pub rx_rc: Rc<mpsc::Receiver<GameTick>>
     }
 
     impl Popup for TestPopup {
@@ -259,14 +264,16 @@ mod test {
             }
         }
 
-        fn render(&mut self, frame: &mut Frame, tick: GameTick) { }
+        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
+            self.sx.send(tick).unwrap();
+        }
 
         fn draw_location(&self) -> tui::layout::Rect {
             tui::layout::Rect::new(0, 0, 10, 10)
         }
 
         fn tear_down(&mut self) {
-            self.sx.send(true).unwrap();
+            self.sx.send(DUMMY_TICK).unwrap();
         }
 
     }
@@ -308,7 +315,7 @@ mod test {
 
         // Test popped thing is the top of stack (by checking the write popup changed)
         popped.as_mut().tear_down();
-        assert_eq!(screen_1_rx_rc.try_recv(), Ok(true));
+        assert_eq!(screen_1_rx_rc.try_recv(), Ok(DUMMY_TICK));
 
         Ok(())
     }
@@ -344,7 +351,7 @@ mod test {
 
         // Test popped thing is the top of stack (by checking the write popup changed)
         popped.as_mut().tear_down();
-        assert_eq!(popup_1_rx_rc.try_recv(), Ok(true));
+        assert_eq!(popup_1_rx_rc.try_recv(), Ok(DUMMY_TICK));
 
         Ok(())
     }
@@ -366,18 +373,49 @@ mod test {
         }
 
         // Screen manager is dropped
-        assert_eq!(test_screen_rx.try_recv(), Ok(true));
-        assert_eq!(test_popup_rx.try_recv(), Ok(true));
+        assert_eq!(test_screen_rx.try_recv(), Ok(DUMMY_TICK));
+        assert_eq!(test_popup_rx.try_recv(), Ok(DUMMY_TICK));
 
         Ok(())
     }
 
+    /// Test commands handled correctly with screens
     #[test]
-    fn test_render() -> TestResult {
+    fn test_render_screens() -> TestResult {
         let mut screen_manager = ScreenManager::new()?;
-        // TODO test render
+
+        // Create screens
+        let screen_top = TestScreen::new();
+        let screen_bottom = TestScreen::new();
+        let rc_rx_top = screen_top.rx_rc.clone();
+        let rc_rx_bottom = screen_bottom.rx_rc.clone();
+
+        // topdd it to manager
+        screen_manager.push_screen(Box::new(screen_bottom));
+        screen_manager.push_screen(Box::new(screen_top));
+
+        // Create the test tick in question
+        let test_tick = GameTick::Command(Duration::from_millis(100), Command::Up);
+
+        // call render once
+        let screens = &mut screen_manager.screens;
+        let popups = &mut screen_manager.popups;
+        screen_manager.terminal.draw(move |f| {
+            render(f, screens, popups, test_tick);
+        })?;
+
+        // Test the current things got what they needed
+        assert_eq!(rc_rx_top.try_recv(), Ok(test_tick));
+        assert_eq!(rc_rx_bottom.try_recv().err(), None);
 
         Ok(())
+    }
+
+    /// Test commands handled correctly with screens and popups
+    // #[test] TODO
+    fn test_render_popup_and_screen() -> TestResult {
+        todo!()
+
     }
 
 }

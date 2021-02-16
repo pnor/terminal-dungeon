@@ -145,12 +145,12 @@ impl InputManager {
 mod test {
     use super::*;
     use serial_test::serial;
-    use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
     use enigo::*;
     use std::sync::mpsc::{Receiver};
     use std::time::Duration;
     use std::fmt;
     use std::error::Error;
+    use crate::utility::test_util;
 
     type TestResult = std::result::Result<(), Box<dyn Error>>;
 
@@ -173,20 +173,7 @@ mod test {
         InputManager::new(Duration::from_millis(16), Duration::from_secs(1))
     }
 
-    /// Sets up the terminal for input testing
-    fn setup() -> TestResult {
-        clear_inputs();
-        enable_raw_mode()?;
-        Ok(())
-    }
-
-    /// Cleans up the terminal after input testing
-    fn tear_down() -> TestResult {
-        disable_raw_mode()?;
-        Ok(())
-    }
-
-    /// Shorter to call wrapper of `get_input_manager_events`
+    /// Convenience Wrapper of `get_input_manager_events`
     fn get_input_events(
         rx: &Receiver<InputEvent>,
         number_events: u32
@@ -274,18 +261,10 @@ mod test {
         events.iter().any(|event| compare(&event, input_event))
     }
 
-    /// Reads all events until there are none left
-    /// - `timeout` is the longest to wait for any event
-    fn clear_inputs() {
-        while event::poll(Duration::from_millis(100)).unwrap() {
-            let _ = event::read();
-        }
-    }
-
     #[test]
     #[serial]
     fn test_simple_input() -> TestResult {
-        setup()?;
+        test_util::setup_input_test()?;
 
         let mut enigo = Enigo::new();
 
@@ -298,14 +277,14 @@ mod test {
         let key_pressed = key_event('k');
         assert!(has_event(&results, &key_pressed));
 
-        tear_down()?;
+        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_no_input() -> TestResult {
-        setup()?;
+        test_util::setup_input_test()?;
 
         let input_rate = Duration::from_millis(16);
         let input_manager = make_input_manager();
@@ -318,14 +297,14 @@ mod test {
 
         assert!(all_ticks);
 
-        tear_down()?;
+        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_multiple_keys() -> TestResult {
-        setup()?;
+        test_util::setup_input_test()?;
         let mut enigo = Enigo::new();
 
         let input_rate = Duration::from_millis(16);
@@ -346,14 +325,14 @@ mod test {
 
         assert!(has_proper_keys);
 
-        tear_down()?;
+        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
     #[serial]
     fn test_key_order() -> TestResult {
-        setup()?;
+        test_util::setup_input_test()?;
         let mut enigo = Enigo::new();
 
         let input_manager = make_input_manager();
@@ -371,7 +350,7 @@ mod test {
 
         assert!(first_is_first && second_is_second && third_is_third);
 
-        tear_down()?;
+        test_util::tear_down_input_test()?;
         Ok(())
     }
 

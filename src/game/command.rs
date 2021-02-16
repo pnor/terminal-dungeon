@@ -1,7 +1,8 @@
 use std::time::Duration;
+use std::fmt::Debug;
 
 /// Possible actions the player gives the games
-#[derive(Copy, PartialEq)]
+#[derive(Copy, PartialEq, Debug)]
 pub enum GameTick {
     Tick(Duration),
     Command(Duration, Command)
@@ -26,7 +27,7 @@ impl Clone for GameTick {
 
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum Command {
      Up,
      Down,
