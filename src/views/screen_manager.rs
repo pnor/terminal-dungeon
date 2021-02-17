@@ -117,28 +117,37 @@ impl Drop for ScreenManager {
 }
 
 /// Renders the screen (popups and screen stack)
+///
+/// If there are both popups and screens, then if the `tick` was a Command, the topmost Popup will receive
+/// the Command, while the rest of the popups just receive the deltatime Tick.
+/// Then the topmost screen will also receive the deltatime Tick, while the rest of the screens don't receive
+/// anything
 fn render(f: &mut Frame, screens: &mut Vec<Box<dyn Screen>>, popups: &mut Vec<Box<dyn Popup>>, tick: GameTick) {
     let tick = render_popups(f, popups, tick);
     render_screens(f, screens, tick);
 }
 
-/// Renders the topmost screen in the screen stack
+/// Renders the topmost screen in the screen stack (not giving any other screens the deltatime Tick)
 fn render_screens(f: &mut Frame, screens: &mut Vec<Box<dyn Screen>>, tick: GameTick) {
-    if let Some(top_screen) = screens.first_mut() {
+    if let Some(top_screen) = screens.last_mut() {
         top_screen.render(f, tick);
     }
 }
 
-/// Renders each of the popups, only allowing the topmost popup to get commands
+/// Renders each of the popups, only allowing the topmost popup to get commands, while giving popups below it just
+/// the deltatime Tick
 fn render_popups(f: &mut Frame, popups: &mut Vec<Box<dyn Popup>>, tick: GameTick) -> GameTick {
     let mut tick = tick;
 
-    for i in (0..popups.len()).rev() {
+    let popups_length = popups.len();
+
+    for i in 0..popups_length {
         let popup_screen = &mut popups[i];
 
-        if i == 0 {
+        if i == popups_length - 1 {
             // Render topmost popup with the full tick + command
             popup_screen.render(f, tick);
+
             // Downgrade tick as the command has been "used"
             tick = remove_input_from_tick(tick);
         } else {
@@ -384,17 +393,17 @@ mod test {
     fn test_render_screens() -> TestResult {
         let mut screen_manager = ScreenManager::new()?;
 
-        // Create screens
+        // create screens
         let screen_top = TestScreen::new();
         let screen_bottom = TestScreen::new();
-        let rc_rx_top = screen_top.rx_rc.clone();
-        let rc_rx_bottom = screen_bottom.rx_rc.clone();
+        let top_rx = screen_top.rx_rc.clone();
+        let bottom_rx = screen_bottom.rx_rc.clone();
 
-        // topdd it to manager
+        // add it to manager
         screen_manager.push_screen(Box::new(screen_bottom));
         screen_manager.push_screen(Box::new(screen_top));
 
-        // Create the test tick in question
+        // create the test tick in question
         let test_tick = GameTick::Command(Duration::from_millis(100), Command::Up);
 
         // call render once
@@ -404,18 +413,55 @@ mod test {
             render(f, screens, popups, test_tick);
         })?;
 
-        // Test the current things got what they needed
-        assert_eq!(rc_rx_top.try_recv(), Ok(test_tick));
-        assert_eq!(rc_rx_bottom.try_recv().err(), None);
+        // test the current things got what they needed
+        assert_eq!(top_rx.try_recv().ok(), Some(test_tick));
+        assert_eq!(bottom_rx.try_recv().ok(), None);
 
         Ok(())
     }
 
     /// Test commands handled correctly with screens and popups
-    // #[test] TODO
+    #[test]
     fn test_render_popup_and_screen() -> TestResult {
-        todo!()
+        let mut screen_manager = ScreenManager::new()?;
 
+        // create screens
+        let screen_top = TestScreen::new();
+        let screen_bottom = TestScreen::new();
+        let popup_top = TestPopup::new();
+        let popup_bottom = TestPopup::new();
+
+        let screen_top_rx = screen_top.rx_rc.clone();
+        let screen_bottom_rx = screen_bottom.rx_rc.clone();
+        let popup_top_rx = popup_top.rx_rc.clone();
+        let popup_bottom_rx = popup_bottom.rx_rc.clone();
+
+        // add it to manager
+        screen_manager.push_popup(Box::new(popup_bottom));
+        screen_manager.push_popup(Box::new(popup_top));
+
+        screen_manager.push_screen(Box::new(screen_bottom));
+        screen_manager.push_screen(Box::new(screen_top));
+
+        // create the test tick in question
+        let test_tick = GameTick::Command(Duration::from_millis(100), Command::Up);
+        let deltatime_tick = remove_input_from_tick(test_tick);
+
+        // call render once
+        let screens = &mut screen_manager.screens;
+        let popups = &mut screen_manager.popups;
+        screen_manager.terminal.draw(move |f| {
+            render(f, screens, popups, test_tick);
+        })?;
+
+        // test the current things got what they needed
+        assert_eq!(popup_top_rx.try_recv().ok(), Some(test_tick));
+        assert_eq!(popup_bottom_rx.try_recv().ok(), Some(deltatime_tick)); // TODO broken/fails
+
+        assert_eq!(screen_top_rx.try_recv().ok(), Some(deltatime_tick));
+        assert_eq!(screen_bottom_rx.try_recv().ok(), None);
+
+        Ok(())
     }
 
 }
