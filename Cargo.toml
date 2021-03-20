@@ -13,5 +13,5 @@ specs = { version = "0.16.1", features = ["specs-derive"] }
 tui = { version = "0.14", default-features = false, features = ['crossterm'] }
 
 [dev-dependencies]
-enigo = "0.0.14"
-serial_test = "*"
+scopeguard = "*"
+ntest = "*"

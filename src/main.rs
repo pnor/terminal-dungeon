@@ -1,3 +1,4 @@
+#[cfg(test)] #[macro_use(defer)] extern crate scopeguard;
 mod world;
 mod entities;
 mod utility;
@@ -19,6 +20,7 @@ use component::*;
 use systems::*;
 use utility::text_canvas::{TextCanvas, CanvasSymbol};
 use game::{Command, GameTick};
+use game::source::EventSource;
 use game::input_manager::{InputManager, InputManagerError};
 
 use std::rc::Rc;
@@ -47,7 +49,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     add_resources(&mut world);
     make_player(&mut world);
 
-    let input_manager = InputManager::new(Duration::from_millis(16), Duration::from_secs(1));
+    let source = EventSource::new();
+    let input_manager = InputManager::new(source, Duration::from_millis(16), Duration::from_secs(1));
 
     for _ in 1..400 {
         let command = input_manager.tick().unwrap();

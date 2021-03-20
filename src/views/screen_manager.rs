@@ -1,8 +1,10 @@
 use std::error::Error;
+use std::collections::VecDeque;
 use crate::game::GameTick;
 use crate::game::input_manager::InputManager;
 use crate::game::input_manager::InputManagerError;
-use crossterm::event::EnableMouseCapture;
+use crate::game::source::{Source, FakeSource, EventSource};
+use crossterm::event::{EnableMouseCapture, Event};
 use crossterm::execute;
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::enable_raw_mode;
@@ -12,6 +14,7 @@ use std::time::Duration;
 use std::fmt;
 use super::Popup;
 use super::Screen;
+use super::ScreenManagerCallback;
 use tui::Terminal as TuiTerminal;
 use tui::Frame as TuiFrame;
 use tui::backend::CrosstermBackend;
@@ -19,6 +22,7 @@ use tui::backend::CrosstermBackend;
 type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
 type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;
 type Result<T> = std::result::Result<T, ScreenManagerError>;
+type Callback = Box<ScreenManagerCallback>;
 
 /// Manages screens and popups in the game, and controls which views get inputs
 pub struct ScreenManager {
@@ -26,13 +30,22 @@ pub struct ScreenManager {
     popups: Vec<Box<dyn Popup>>,
     input_manager: InputManager,
     terminal: Terminal,
-    pub should_quit: bool
+    callback_queue: VecDeque<Callback>,
+    pub should_quit: bool,
 }
 
 impl ScreenManager {
 
-    /// Initializes a `ScreenManager` with no screens or popups
     pub fn new() -> Result<ScreenManager> {
+        ScreenManager::init(EventSource::new())
+    }
+
+    pub fn debug_new(events: Vec<Event>) -> Result<ScreenManager> {
+        ScreenManager::init(FakeSource::new(events))
+    }
+
+    /// Initializes a `ScreenManager` with no screens or popups
+    fn init(source: impl Source + Send + 'static) -> Result<ScreenManager> {
         let tick_rate = Duration::from_millis(16);
         let tick_timeout = Duration::from_secs(1);
         let terminal = Self::setup_terminal()?;
@@ -40,8 +53,9 @@ impl ScreenManager {
         let screen_manager = ScreenManager {
             screens: Vec::new(),
             popups: Vec::new(),
-            input_manager: InputManager::new(tick_rate, tick_timeout),
+            input_manager: InputManager::new(source, tick_rate, tick_timeout),
             terminal: terminal,
+            callback_queue: VecDeque::<Callback>::new(),
             should_quit: false
         };
 
@@ -64,7 +78,8 @@ impl ScreenManager {
     }
 
     /// Starts the main render loop, which polls for input and sends the deltatime and user input to the
-    /// screens/popups
+    /// screens/popups.
+    /// After each render loop, calls the callbacks of screens and popups and clears it
     pub fn start_main_loop(&mut self) -> Result<()> {
         while !self.should_quit {
             let tick = self.input_manager.tick()?;
@@ -74,9 +89,35 @@ impl ScreenManager {
             self.terminal.draw(move |f| {
                 render(f, screens, popups, tick);
             })?;
+
+            self.handle_callbacks();
         }
 
         Ok(())
+    }
+
+    /// Updates the queue using the callbacks of the screens and popups, and calls each in turn
+    fn handle_callbacks(&mut self) {
+        self.update_callback_queue();
+
+        let callbacks: Vec<Box<ScreenManagerCallback>> = self.callback_queue.drain(0..).collect();
+        for mut callback in callbacks {
+            callback(self);
+        }
+    }
+
+    /// Udates the queue with callbacks of screens and popups
+    /// The order is popup callbacks first, then screeen popups
+    fn update_callback_queue(&mut self) {
+        self.callback_queue.clear();
+
+        for popup in &mut self.popups {
+            self.callback_queue.append(&mut popup.as_mut().get_screen_manager_callbacks());
+        }
+
+        for screen in &mut self.popups {
+            self.callback_queue.append(&mut screen.as_mut().get_screen_manager_callbacks());
+        }
     }
 
     /// Push a new `Screen` to the top of the Screen stack
@@ -223,6 +264,7 @@ mod test {
     use std::sync::mpsc;
     use std::rc::Rc;
     use crate::game::Command;
+    use std::collections::VecDeque;
     use super::*;
 
     static DUMMY_TICK: GameTick = GameTick::Tick(Duration::from_secs(1));
@@ -231,7 +273,9 @@ mod test {
 
     struct TestScreen {
         sx: mpsc::Sender<GameTick>,
-        pub rx_rc: Rc<mpsc::Receiver<GameTick>>
+        pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
+        callbacks: VecDeque<Box<ScreenManagerCallback>>,
+        pub render_counter: i32,
     }
 
     impl Screen for TestScreen {
@@ -242,23 +286,43 @@ mod test {
 
             TestScreen {
                 sx,
-                rx_rc
+                rx_rc,
+                callbacks: VecDeque::<Callback>::new(),
+                render_counter: 0,
             }
         }
 
         fn render(&mut self, _: &mut Frame, tick: GameTick) {
             self.sx.send(tick).unwrap();
+            self.render_counter += 1;
+            println!("-- render: {}", self.render_counter);
+
+            // After 10 ticks, tell the screen manager to quit
+            if self.render_counter > 10 {
+                self.add_screen_manager_callback(Box::new(|s: &mut ScreenManager| {
+                    s.should_quit = true;
+                }));
+            }
         }
 
         fn tear_down(&mut self) {
             self.sx.send(DUMMY_TICK).unwrap();
         }
 
+        fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>) {
+            self.callbacks.push_front(callback)
+        }
+
+        fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>> {
+            self.callbacks.drain(0..).collect()
+        }
+
     }
 
     struct TestPopup {
         sx: mpsc::Sender<GameTick>,
-        pub rx_rc: Rc<mpsc::Receiver<GameTick>>
+        pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
+        callbacks: VecDeque<Box<ScreenManagerCallback>>,
     }
 
     impl Popup for TestPopup {
@@ -269,7 +333,8 @@ mod test {
 
             TestPopup {
                 sx,
-                rx_rc
+                rx_rc,
+                callbacks: VecDeque::<Callback>::new(),
             }
         }
 
@@ -285,6 +350,36 @@ mod test {
             self.sx.send(DUMMY_TICK).unwrap();
         }
 
+        fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>) {
+            self.callbacks.push_front(callback)
+        }
+
+        fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>> {
+            self.callbacks.drain(0..).collect()
+        }
+
+    }
+
+    /// Gets all ticks from a Receiver
+    fn get_ticks_from_rx(rx: &mpsc::Receiver<GameTick>) -> Vec<GameTick> {
+        let mut ticks = Vec::new();
+
+        while let Some(tick) = rx.try_recv().ok() {
+            ticks.push(tick);
+        }
+
+        ticks
+    }
+
+
+    /// Returns `true` if the `tick` is `GameTick::Command` and has a command that is the same
+    /// as `command`
+    fn tick_has_command(tick: GameTick, command: Command) -> bool {
+        if let GameTick::Command(_, tick_command) = tick {
+            tick_command == command
+        } else {
+            false
+        }
     }
 
     #[test]
@@ -456,11 +551,38 @@ mod test {
 
         // test the current things got what they needed
         assert_eq!(popup_top_rx.try_recv().ok(), Some(test_tick));
-        assert_eq!(popup_bottom_rx.try_recv().ok(), Some(deltatime_tick)); // TODO broken/fails
+        assert_eq!(popup_bottom_rx.try_recv().ok(), Some(deltatime_tick));
 
         assert_eq!(screen_top_rx.try_recv().ok(), Some(deltatime_tick));
         assert_eq!(screen_bottom_rx.try_recv().ok(), None);
 
+        Ok(())
+    }
+
+    /// Test keyboard input handled correctly with just screens
+    #[test]
+    fn test_main_loop_screen() -> TestResult {
+        let mut screen_manager = ScreenManager::new()?;
+
+        let screen = TestScreen::new();
+
+        let screen_rx = screen.rx_rc.clone();
+
+        screen_manager.push_screen(Box::new(screen));
+
+        screen_manager.start_main_loop()?;
+
+        // After 10 render, it should have quit
+        // Check it recieved input
+        let ticks = get_ticks_from_rx(&screen_rx);
+
+        let an_input = ticks.iter().find(|&tick| {
+            tick_has_command(*tick, Command::Up)
+        });
+
+        // TODO fix timeout error on this test (and add defer to other similar tests)
+
+        assert_ne!(an_input, None);
         Ok(())
     }
 

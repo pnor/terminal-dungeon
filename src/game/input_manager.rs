@@ -1,5 +1,7 @@
+use std::marker::Send;
 use crate::game::{GameTick, Command};
-use crossterm::event::{self, Event as CEvent, KeyCode, KeyEvent};
+use crate::game::source::Source;
+use crossterm::event::{Event as CEvent, KeyCode, KeyEvent};
 use std::{
     sync::mpsc,
     thread,
@@ -8,38 +10,6 @@ use std::{
 
 type Result<T> = std::result::Result<T, InputManagerError>;
 
-/// Error for InputManager related errors
-#[derive(Debug)]
-pub enum InputManagerError {
-    CrosstermError(crossterm::ErrorKind),
-    RecvTimoutERror(mpsc::RecvTimeoutError),
-    SendError(mpsc::SendError<InputEvent>),
-}
-
-impl From<crossterm::ErrorKind> for InputManagerError {
-
-    fn from(error: crossterm::ErrorKind) -> Self {
-        Self::CrosstermError(error)
-    }
-}
-
-impl From<mpsc::RecvTimeoutError> for InputManagerError {
-
-    fn from(error: mpsc::RecvTimeoutError) -> Self {
-        Self::RecvTimoutERror(error)
-    }
-
-}
-
-impl From<mpsc::SendError<InputEvent>> for InputManagerError {
-
-    fn from(error: mpsc::SendError<InputEvent>) -> Self {
-        Self::SendError(error)
-    }
-
-}
-
-
 /// Abstraction that tracks time between the last input event and Crossterm Events
 #[derive(PartialEq, Debug)]
 enum Event<I> {
@@ -47,11 +17,12 @@ enum Event<I> {
     Tick(Duration),
 }
 
-type InputEvent = Event<CEvent>;
+pub type InputEvent = Event<CEvent>;
 
 /// Manages user input by polling on another thread
 /// Cleans up when this struct is dropped
 pub struct InputManager {
+    /// Receiver for communicating input on polling thread
     rx: mpsc::Receiver<InputEvent>,
     /// How long until async thread sends a Event::Tick (max deltatime)
     tick_rate: Duration,
@@ -62,7 +33,7 @@ pub struct InputManager {
 impl InputManager {
 
     /// Creates `InputManager` and starts asynchronously polling user input
-    pub fn new(tick_rate: Duration, tick_timeout: Duration) -> Self {
+    pub fn new(mut source: impl Source + Send + 'static, tick_rate: Duration, tick_timeout: Duration) -> Self {
         let (sx, rx) = mpsc::channel();
         let input_manager = InputManager {
             rx,
@@ -70,28 +41,28 @@ impl InputManager {
             tick_timeout
         };
 
-        input_manager.start_async_polling(sx);
+        input_manager.start_async_polling(source, sx);
 
         input_manager
     }
 
     /// Starts the async thread that polls for input and returns ticks
     /// Thread exits if any kind of Error is encountered when working with input
-    fn start_async_polling(&self, sx: mpsc::Sender<InputEvent>) {
+    fn start_async_polling(&self, mut source: impl Source + Send + 'static, sx: mpsc::Sender<InputEvent>) {
         let tick_rate = self.tick_rate;
         thread::spawn(move || -> Result<()> {
             let mut last_tick = Instant::now();
 
             loop {
-                // poll for tick rate duration. If no evetns, send tick event
+                // poll for tick rate duration. If no events, send tick event
                 let timeout = tick_rate
                     .checked_sub(last_tick.elapsed())
                     .unwrap_or_else(|| Duration::from_secs(0));
 
                 // if has event, send it
-                if event::poll(timeout).unwrap() {
+                if source.has_event(timeout) {
                     let time_since_last_tick = Instant::now() - last_tick;
-                    let event = event::read()?;
+                    let event = source.read()?;
                     sx.send(Event::Input(time_since_last_tick, event))?;
                 }
 
@@ -127,7 +98,7 @@ impl InputManager {
         }
     }
 
-    // TODO rename
+    // TODO change to have changeable configs
     fn match_key_event(key: KeyEvent) -> Command {
         match key.code {
             KeyCode::Char('k') => Command::Up,
@@ -140,17 +111,45 @@ impl InputManager {
 
 }
 
+/// Error for InputManager related errors
+#[derive(Debug)]
+pub enum InputManagerError {
+    CrosstermError(crossterm::ErrorKind),
+    RecvTimoutERror(mpsc::RecvTimeoutError),
+    SendError(mpsc::SendError<InputEvent>),
+}
+
+impl From<crossterm::ErrorKind> for InputManagerError {
+
+    fn from(error: crossterm::ErrorKind) -> Self {
+        Self::CrosstermError(error)
+    }
+}
+
+impl From<mpsc::RecvTimeoutError> for InputManagerError {
+
+    fn from(error: mpsc::RecvTimeoutError) -> Self {
+        Self::RecvTimoutERror(error)
+    }
+
+}
+
+impl From<mpsc::SendError<InputEvent>> for InputManagerError {
+
+    fn from(error: mpsc::SendError<InputEvent>) -> Self {
+        Self::SendError(error)
+    }
+
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use serial_test::serial;
-    use enigo::*;
-    use std::sync::mpsc::{Receiver};
+    use std::sync::mpsc::Receiver;
     use std::time::Duration;
     use std::fmt;
     use std::error::Error;
-    use crate::utility::test_util;
+    use crate::game::source::FakeSource;
 
     type TestResult = std::result::Result<(), Box<dyn Error>>;
 
@@ -169,8 +168,8 @@ mod test {
     }
 
     /// Convenienve method for creating the InputManager
-    fn make_input_manager() -> InputManager {
-        InputManager::new(Duration::from_millis(16), Duration::from_secs(1))
+    fn make_input_manager(events: Vec<CEvent>) -> InputManager {
+        InputManager::new(FakeSource::new(events), Duration::from_millis(16), Duration::from_secs(1))
     }
 
     /// Convenience Wrapper of `get_input_manager_events`
@@ -262,32 +261,22 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn test_simple_input() -> TestResult {
-        test_util::setup_input_test()?;
-
-        let mut enigo = Enigo::new();
-
-        let input_manager = make_input_manager();
-
-        enigo.key_down(Key::Layout('k'));
+        let input_manager = make_input_manager(
+            vec!(crossterm_key('k'))
+        );
 
         let results = get_input_events(&input_manager.rx, 1)?;
 
         let key_pressed = key_event('k');
         assert!(has_event(&results, &key_pressed));
 
-        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
-    #[serial]
     fn test_no_input() -> TestResult {
-        test_util::setup_input_test()?;
-
-        let input_rate = Duration::from_millis(16);
-        let input_manager = make_input_manager();
+        let input_manager = make_input_manager(vec!());
 
         let results = get_input_events(&input_manager.rx, 0)?;
 
@@ -297,22 +286,18 @@ mod test {
 
         assert!(all_ticks);
 
-        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
-    #[serial]
     fn test_multiple_keys() -> TestResult {
-        test_util::setup_input_test()?;
-        let mut enigo = Enigo::new();
-
-        let input_rate = Duration::from_millis(16);
-        let input_manager = make_input_manager();
-
-        enigo.key_down(Key::Layout('a'));
-        enigo.key_down(Key::Layout('b'));
-        enigo.key_down(Key::Layout('c'));
+        let input_manager = make_input_manager(
+            vec!(
+               crossterm_key('a'),
+               crossterm_key('b'),
+               crossterm_key('c')
+            )
+        );
 
         let results = get_input_events(&input_manager.rx, 3)?;
 
@@ -325,21 +310,18 @@ mod test {
 
         assert!(has_proper_keys);
 
-        test_util::tear_down_input_test()?;
         Ok(())
     }
 
     #[test]
-    #[serial]
     fn test_key_order() -> TestResult {
-        test_util::setup_input_test()?;
-        let mut enigo = Enigo::new();
-
-        let input_manager = make_input_manager();
-
-        enigo.key_down(Key::Layout('1'));
-        enigo.key_down(Key::Layout('2'));
-        enigo.key_down(Key::Layout('3'));
+        let input_manager = make_input_manager(
+            vec!(
+               crossterm_key('1'),
+               crossterm_key('2'),
+               crossterm_key('3'),
+            )
+        );
 
         let results = get_input_events(&input_manager.rx, 3)?;
         let no_ticks = remove_ticks(results);
@@ -350,7 +332,6 @@ mod test {
 
         assert!(first_is_first && second_is_second && third_is_third);
 
-        test_util::tear_down_input_test()?;
         Ok(())
     }
 
