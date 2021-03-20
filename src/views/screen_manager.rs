@@ -75,7 +75,10 @@ impl ScreenManager {
 
     /// Starts the main render loop, which polls for input and sends the deltatime and user input to the
     /// screens/popups.
-    /// After each render loop, calls the callbacks of screens and popups and clears it
+    /// After each render loop, calls any added callbacks from screens and popups
+    ///
+    /// Callbacks are called in order of the Popup stack, then the Screen stack, both from top to bottom. As each is
+    /// called, it is removed from the queue
     pub fn start_main_loop(&mut self) -> Result<()> {
         while !self.should_quit {
             let tick = self.input_manager.tick()?;
@@ -103,7 +106,7 @@ impl ScreenManager {
     }
 
     /// Udates the queue with callbacks of screens and popups
-    /// The order is popup callbacks first, then screeen popups
+    /// The order is popup callbacks first then screeen popups, both in order of their stacks
     fn update_callback_queue(&mut self) {
         self.callback_queue.clear();
 
@@ -111,7 +114,7 @@ impl ScreenManager {
             self.callback_queue.append(&mut popup.as_mut().get_screen_manager_callbacks());
         }
 
-        for screen in &mut self.popups {
+        for screen in &mut self.screens {
             self.callback_queue.append(&mut screen.as_mut().get_screen_manager_callbacks());
         }
     }
@@ -256,6 +259,8 @@ impl From<InputManagerError> for ScreenManagerError {
 
 #[cfg(test)]
 mod test {
+    use ntest::timeout;
+    use crate::utility::test_util::crossterm_key;
     use std::error::Error;
     use std::sync::mpsc;
     use std::rc::Rc;
@@ -267,6 +272,7 @@ mod test {
 
     type TestResult = std::result::Result<(), Box<dyn Error>>;
 
+    /// Testing Screen that quits after a set amount of renders
     struct TestScreen {
         sx: mpsc::Sender<GameTick>,
         pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
@@ -291,7 +297,6 @@ mod test {
         fn render(&mut self, _: &mut Frame, tick: GameTick) {
             self.sx.send(tick).unwrap();
             self.render_counter += 1;
-            println!("-- render: {}", self.render_counter);
 
             // After 10 ticks, tell the screen manager to quit
             if self.render_counter > 10 {
@@ -315,10 +320,12 @@ mod test {
 
     }
 
+    /// Testing Popup that quits after a set amount of renders
     struct TestPopup {
         sx: mpsc::Sender<GameTick>,
         pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
         callbacks: VecDeque<Box<ScreenManagerCallback>>,
+        pub render_counter: i32,
     }
 
     impl Popup for TestPopup {
@@ -331,11 +338,20 @@ mod test {
                 sx,
                 rx_rc,
                 callbacks: VecDeque::<Callback>::new(),
+                render_counter: 0
             }
         }
 
         fn render(&mut self, frame: &mut Frame, tick: GameTick) {
             self.sx.send(tick).unwrap();
+            self.render_counter += 1;
+
+            // After 10 ticks, tell screen manager to quit
+            if self.render_counter > 10 {
+                self.add_screen_manager_callback(Box::new(|s: &mut ScreenManager| {
+                    s.should_quit = true;
+                }));
+            }
         }
 
         fn draw_location(&self) -> tui::layout::Rect {
@@ -555,31 +571,89 @@ mod test {
         Ok(())
     }
 
-    //// Test keyboard input handled correctly with just screens
-    // #[test]
-    // fn test_main_loop_screen() -> TestResult {
-    //     let mut screen_manager = ScreenManager::new()?;
+    /// Test keyboard input handled correctly with just screens
+    #[test]
+    #[timeout(2000)]
+    fn test_main_loop_screen() {
+        let mut screen_manager = ScreenManager::debug_new(vec!(
+            crossterm_key('k')
+        )).unwrap();
 
-    //     let screen = TestScreen::new();
+        let screen = TestScreen::new();
 
-    //     let screen_rx = screen.rx_rc.clone();
+        let screen_rx = screen.rx_rc.clone();
 
-    //     screen_manager.push_screen(Box::new(screen));
+        screen_manager.push_screen(Box::new(screen));
 
-    //     screen_manager.start_main_loop()?;
+        screen_manager.start_main_loop().unwrap();
 
-    //     // After 10 render, it should have quit
-    //     // Check it recieved input
-    //     let ticks = get_ticks_from_rx(&screen_rx);
+        // After 10 render, it should have quit
+        let ticks = get_ticks_from_rx(&screen_rx);
 
-    //     let an_input = ticks.iter().find(|&tick| {
-    //         tick_has_command(*tick, Command::Up)
-    //     });
+        let an_input = ticks.iter().find(|&tick| {
+            tick_has_command(*tick, Command::Up)
+        });
 
-    //     // TODO fix timeout error on this test (and add defer to other similar tests)
+        assert_ne!(an_input, None);
+    }
 
-    //     assert_ne!(an_input, None);
-    //     Ok(())
-    // }
+    /// Test keyboard input handled correctly with just popups
+    #[test]
+    #[timeout(2000)]
+    fn test_main_loop_popup() {
+        let mut screen_manager = ScreenManager::debug_new(vec!(
+            crossterm_key('k')
+        )).unwrap();
 
+        let popup = TestPopup::new();
+
+        let popup_rx = popup.rx_rc.clone();
+
+        screen_manager.push_popup(Box::new(popup));
+
+        screen_manager.start_main_loop().unwrap();
+
+        // After 10 render, it should have quit
+        let ticks = get_ticks_from_rx(&popup_rx);
+
+        let an_input = ticks.iter().find(|&tick| {
+            tick_has_command(*tick, Command::Up)
+        });
+
+        assert_ne!(an_input, None);
+    }
+
+    /// Test keyboard input handled corrrectly with both screens and popups
+    #[test]
+    #[timeout(2000)]
+    fn test_main_loop_screens_and_popups() {
+        let mut screen_manager = ScreenManager::debug_new(vec!(
+            crossterm_key('k')
+        )).unwrap();
+
+        let screen = TestScreen::new();
+        let popup = TestPopup::new();
+
+        let screen_rx = screen.rx_rc.clone();
+        let popup_rx = popup.rx_rc.clone();
+
+        screen_manager.push_screen(Box::new(screen));
+        screen_manager.push_popup(Box::new(popup));
+
+        screen_manager.start_main_loop().unwrap();
+
+        // After 10 render, it should have quit
+        let screen_ticks = get_ticks_from_rx(&screen_rx);
+        let popup_ticks = get_ticks_from_rx(&popup_rx);
+
+        let popup_input = popup_ticks.iter().find(|&tick| {
+            tick_has_command(*tick, Command::Up)
+        });
+        let screen_input = screen_ticks.iter().find(|&tick| {
+            tick_has_command(*tick, Command::Up)
+        });
+
+        assert_ne!(popup_input, None); // Popup should of received input
+        assert_eq!(screen_input, None); // and not the screen
+    }
 }

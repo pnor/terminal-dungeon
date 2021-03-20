@@ -145,6 +145,7 @@ impl From<mpsc::SendError<InputEvent>> for InputManagerError {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::utility::test_util::crossterm_key;
     use std::sync::mpsc::Receiver;
     use std::time::Duration;
     use std::fmt;
@@ -224,11 +225,6 @@ mod test {
         }
 
         Ok(results)
-    }
-
-    /// Returns standard Crossterm Key Event from a character (doesn't include Alt/Ctrl/etc.)
-    fn crossterm_key(letter: char) -> CEvent {
-        CEvent::Key(KeyEvent::from(KeyCode::Char(letter)))
     }
 
     /// Returns `InputEvent` corresponding to keyboard input character
