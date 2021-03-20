@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::time::Duration;
 use crossterm::event::{self, Event};
 use crossterm::ErrorKind;
@@ -39,13 +40,13 @@ impl Source for EventSource {
 
 /// `Source` implementation for debugging
 pub struct FakeSource {
-    events: Vec<Event>
+    events: VecDeque<Event>
 }
 
 impl FakeSource {
 
-    pub fn new(events: Vec<Event>) -> Self {
-        FakeSource { events }
+    pub fn new(mut events: Vec<Event>) -> Self {
+        FakeSource { events: events.drain(0..).collect() }
     }
 }
 
@@ -58,7 +59,7 @@ impl Source for FakeSource {
 
     fn read(&mut self) -> Result<Event> {
         let io_error = ErrorKind::IoError(std::io::Error::new(std::io::ErrorKind::Other, "Error in FakeSource!"));
-        self.events.pop().ok_or(io_error)
+        self.events.pop_front().ok_or(io_error)
     }
 
 }

@@ -35,9 +35,9 @@ use tui::widgets::{Widget, Block, Borders, Paragraph};
 use tui::layout::{Rect, Layout, Constraint, Direction};
 
 use crossterm::terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode};
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::event::EnableMouseCapture;
+use crossterm::execute;
+use crossterm::terminal::EnterAlternateScreen;
 
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
@@ -66,6 +66,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     disable_raw_mode()?;
 
     Ok(())
+}
+
+/// Sets up stdout for drawing
+fn setup_stdout() {
+    let mut stdout = io::stdout();
+    let _ = enable_raw_mode();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 }
 
 fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn Error>> {
