@@ -105,6 +105,7 @@ impl InputManager {
             KeyCode::Char('j') => Command::Down,
             KeyCode::Char('h') => Command::Left,
             KeyCode::Char('l') => Command::Right,
+            KeyCode::Char('q') => Command::Quit,
             _ => Command::Up
         }
     }

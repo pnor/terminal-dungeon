@@ -29,8 +29,9 @@ impl Clone for GameTick {
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum Command {
-     Up,
-     Down,
-     Left,
-     Right
+    Up,
+    Down,
+    Left,
+    Right,
+    Quit
 }

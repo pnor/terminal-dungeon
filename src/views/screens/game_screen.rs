@@ -32,7 +32,7 @@ pub struct GameScreen<'a> {
 impl Screen for GameScreen<'_> {
 
     fn new() -> Self {
-        let (mut world, mut dispatcher) = init_game();
+        let (mut world, dispatcher) = init_game();
         register_components(&mut world);
         add_resources(&mut world);
         make_player(&mut world);
@@ -72,7 +72,7 @@ impl Screen for GameScreen<'_> {
 
 fn check_time_to_quit(tick: GameTick) -> bool {
     match tick {
-        GameTick::Command(_, Command::Up) => true,
+        GameTick::Command(_, Command::Quit) => true,
         _ => false
     }
 }
