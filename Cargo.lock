@@ -723,7 +723,6 @@ dependencies = [
  "crossterm",
  "nalgebra",
  "ntest",
- "scopeguard",
  "specs",
  "tui",
 ]

@@ -1,6 +1,6 @@
 use tui::text::{Span, Spans, Text};
 use tui::style::{Color, Style, Modifier};
-use crate::map::Map;
+use crate::world::map::Map;
 use crate::utility::{color_util, conversions};
 
 extern crate nalgebra as na;

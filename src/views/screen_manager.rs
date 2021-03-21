@@ -1,3 +1,4 @@
+use tui::backend::CrosstermBackend;
 use std::error::Error;
 use std::collections::VecDeque;
 use crate::game::GameTick;
@@ -12,12 +13,8 @@ use std::fmt;
 use super::Popup;
 use super::Screen;
 use super::ScreenManagerCallback;
-use tui::Terminal as TuiTerminal;
-use tui::Frame as TuiFrame;
-use tui::backend::CrosstermBackend;
+use super::{Terminal, Frame};
 
-type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
-type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;
 type Result<T> = std::result::Result<T, ScreenManagerError>;
 type Callback = Box<ScreenManagerCallback>;
 

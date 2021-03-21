@@ -1,4 +1,3 @@
-#[cfg(test)] #[macro_use(defer)] extern crate scopeguard;
 mod world;
 mod entities;
 mod utility;
@@ -6,62 +5,34 @@ mod systems;
 mod game;
 mod views;
 
-use std::error::Error;
-use specs::Dispatcher;
-use specs::{DispatcherBuilder, World, WorldExt};
-
-use tui::style::Color;
-
-use crate::map::Map;
-use world::map;
-
-use entities::{component, factory};
-use component::*;
-use systems::*;
-use utility::text_canvas::{TextCanvas, CanvasSymbol};
-use game::{Command, GameTick};
-use game::source::EventSource;
-use game::input_manager::{InputManager, InputManagerError};
-
-use std::rc::Rc;
-
-use std::thread;
-use std::time::Duration;
-
-use std::io::{self, Write, Stdout};
-use tui::Terminal;
-use tui::backend::CrosstermBackend;
-use tui::widgets::{Widget, Block, Borders, Paragraph};
-use tui::layout::{Rect, Layout, Constraint, Direction};
-
-use crossterm::terminal::{Clear, ClearType, enable_raw_mode, disable_raw_mode};
+use crossterm::terminal::Clear;
 use crossterm::event::EnableMouseCapture;
-use crossterm::execute;
 use crossterm::terminal::EnterAlternateScreen;
+use crossterm::terminal::ClearType;
+
+use crate::views::Screen;
+use crate::views::screens::GameScreen;
+use crate::views::ScreenManager;
+
+use crossterm::terminal::disable_raw_mode;
+use crossterm::terminal::enable_raw_mode;
+use crossterm::execute;
+use std::error::Error;
+
+use std::io::{self, Write};
+
 
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
+    setup_ui()?;
 
-    let mut terminal = setup_ui()?;
+    let mut screen_manager = ScreenManager::new()?;
 
-    let (mut world, mut dispatcher) = init_game();
-    register_components(&mut world);
-    add_resources(&mut world);
-    make_player(&mut world);
+    let game_screen = GameScreen::new();
 
-    let source = EventSource::new();
-    let input_manager = InputManager::new(source, Duration::from_millis(16), Duration::from_secs(1));
+    screen_manager.push_screen(Box::new(game_screen));
 
-    for _ in 1..400 {
-        let command = input_manager.tick().unwrap();
-        {
-            let mut command_res = world.write_resource::<GameTick>();
-            *command_res = command;
-        }
-
-        run_world(&mut world, &mut dispatcher);
-        draw_ui(&mut world, &mut terminal);
-    }
+    screen_manager.start_main_loop()?;
 
     disable_raw_mode()?;
 
@@ -75,96 +46,13 @@ fn setup_stdout() {
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 }
 
-fn setup_ui() -> Result<Terminal<CrosstermBackend<Stdout>>, Box<dyn Error>> {
+fn setup_ui() -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
 
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    terminal.clear();
-
-    Ok(terminal)
-}
-
-fn draw_ui(world: &mut World, terminal: &mut Terminal<CrosstermBackend<Stdout>>) {
-    let canvas = world.read_resource::<TextCanvas>();
-
-    terminal.draw(move |f| {
-        let map_text = (*canvas).as_styled_text();
-        let map_display = Paragraph::new(map_text)
-            .block(
-                Block::default()
-                    .title("map!")
-                    .borders(Borders::ALL)
-            );
-
-        let (width, height) = (*canvas).dimensions();
-        let rec = Rect::new(0, 0, width as u16, height as u16);
-
-        f.render_widget(map_display, rec);
-    });
-}
-
-fn clear_screen(stdout: &mut Stdout) {
     write!(stdout, "{}", Clear(ClearType::All));
-}
 
-fn init_game<'a>() -> (World, Dispatcher<'a, 'a>) {
-    let mut world = World::new();
-
-    register_components(&mut world);
-    add_resources(&mut world);
-    make_player(&mut world);
-    let mut dispatch = setup_dispatch();
-
-    (world, dispatch)
-}
-
-fn register_components(world: &mut World) {
-    world.register::<Appearance>();
-    world.register::<Camera>();
-    world.register::<CommandResponse>();
-    world.register::<Follow>();
-    world.register::<Position>();
-}
-
-fn add_resources(world: &mut World) {
-    let map = initialize_map();
-
-    let canvas = TextCanvas::for_map(&map);
-    world.insert(canvas);
-
-    world.insert(map);
-
-    world.insert(GameTick::default());
-}
-
-fn initialize_map() -> Map {
-    map::test_room()
-}
-
-fn make_player(world: &mut World) {
-    let player = factory::make_player(world);
-    let _ = factory::make_camera(player, world);
-}
-
-fn setup_dispatch<'a>() -> Dispatcher<'a, 'a> {
-    DispatcherBuilder::new()
-        .with(CommandSystem, "Command", &[])
-        .with(FollowSystem, "Follow", &["Command"])
-        .with_thread_local(TextRenderSystem)
-        .build()
-}
-
-fn update_command(world: &mut World, command: Command) {
-    let mut resource = world.write_resource::<Command>();
-    *resource = command;
-}
-
-fn run_world(world: &mut World, dispatcher: &mut Dispatcher) {
-    dispatcher.dispatch(&world);
-    world.maintain();
+    Ok(())
 }
