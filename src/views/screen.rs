@@ -1,9 +1,8 @@
 use std::collections::VecDeque;
 use crate::game::GameTick;
 use super::screen_manager::BoxedCallback;
-use std::io::Stdout;
-use tui::Frame;
-use tui::backend::CrosstermBackend;
+use super::Frame;
+
 
 /// Defines a primary view, that shows various widgets
 pub trait Screen {
@@ -12,7 +11,7 @@ pub trait Screen {
     fn new() -> Self where Self:Sized;
 
     /// Renders the screen onto the terminal
-    fn render(&mut self, frame: &mut Frame<CrosstermBackend<Stdout>>, tick: GameTick);
+    fn render(&mut self, frame: &mut Frame, tick: GameTick);
 
     /// Performs clean up when screen is dropped
     fn tear_down(&mut self) {}

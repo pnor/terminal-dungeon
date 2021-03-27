@@ -17,7 +17,7 @@ enum Event<I> {
     Tick(Duration),
 }
 
-pub type InputEvent = Event<CEvent>;
+type InputEvent = Event<CEvent>;
 
 /// Manages user input by polling on another thread
 /// Cleans up when this struct is dropped
@@ -33,7 +33,7 @@ pub struct InputManager {
 impl InputManager {
 
     /// Creates `InputManager` and starts asynchronously polling user input
-    pub fn new(mut source: impl Source + Send + 'static, tick_rate: Duration, tick_timeout: Duration) -> Self {
+    pub fn new(source: impl Source + Send + 'static, tick_rate: Duration, tick_timeout: Duration) -> Self {
         let (sx, rx) = mpsc::channel();
         let input_manager = InputManager {
             rx,
@@ -117,7 +117,7 @@ impl InputManager {
 pub enum InputManagerError {
     CrosstermError(crossterm::ErrorKind),
     RecvTimoutERror(mpsc::RecvTimeoutError),
-    SendError(mpsc::SendError<InputEvent>),
+    SendError,
 }
 
 impl From<crossterm::ErrorKind> for InputManagerError {
@@ -137,8 +137,8 @@ impl From<mpsc::RecvTimeoutError> for InputManagerError {
 
 impl From<mpsc::SendError<InputEvent>> for InputManagerError {
 
-    fn from(error: mpsc::SendError<InputEvent>) -> Self {
-        Self::SendError(error)
+    fn from(_: mpsc::SendError<InputEvent>) -> Self {
+        Self::SendError
     }
 
 }
@@ -146,14 +146,12 @@ impl From<mpsc::SendError<InputEvent>> for InputManagerError {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::utility::test_util::crossterm_key;
+    use crate::utility::test_util::{crossterm_key, TestResult};
     use std::sync::mpsc::Receiver;
     use std::time::Duration;
     use std::fmt;
     use std::error::Error;
     use crate::game::source::FakeSource;
-
-    type TestResult = std::result::Result<(), Box<dyn Error>>;
 
     /// Error for all timeout events
     #[derive(Debug, Clone)]

@@ -40,19 +40,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 /// Sets up stdout for drawing
-fn setup_stdout() {
-    let mut stdout = io::stdout();
-    let _ = enable_raw_mode();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-}
-
 fn setup_ui() -> Result<(), Box<dyn Error>> {
     let mut stdout = io::stdout();
 
     enable_raw_mode()?;
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
 
-    write!(stdout, "{}", Clear(ClearType::All));
+    write!(stdout, "{}", Clear(ClearType::All))?;
 
     Ok(())
 }

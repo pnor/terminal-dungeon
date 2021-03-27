@@ -1,8 +1,6 @@
-use std::sync::mpsc::Receiver;
 use crossterm::event;
 use std::error::Error;
 use std::time::Duration;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 
 pub type TestResult = std::result::Result<(), Box<dyn Error>>;
 

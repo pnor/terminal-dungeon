@@ -1,13 +1,12 @@
+use super::Frame;
 use crate::views::ScreenManager;
 use tui::layout::Rect;
 use tui::widgets::Block;
 use tui::widgets::Paragraph;
 use tui::widgets::Borders;
-use tui::widgets::Widget;
 
 use crate::game::Command;
 use crate::game::GameTick;
-use crate::views::{Terminal, Frame};
 use crate::views::Screen;
 use crate::views::screen_manager::BoxedCallback;
 
@@ -16,13 +15,14 @@ use std::collections::VecDeque;
 use specs::Dispatcher;
 use specs::{DispatcherBuilder, World, WorldExt};
 
-use crate::entities::{component, factory};
+use crate::entities::factory;
 use crate::systems::*;
 use crate::entities::component::*;
 use crate::world::map::{self, Map};
-use crate::utility::text_canvas::{TextCanvas, CanvasSymbol};
+use crate::utility::text_canvas::TextCanvas;
 
 /// Primary screen where game is played
+/// Handles the boiler palte for setting up a Specs World
 pub struct GameScreen<'a> {
     world: World,
     dispatcher: Dispatcher<'a, 'a>,
@@ -84,7 +84,7 @@ fn init_game<'a>() -> (World, Dispatcher<'a, 'a>) {
     register_components(&mut world);
     add_resources(&mut world);
     make_player(&mut world);
-    let mut dispatch = setup_dispatch();
+    let dispatch = setup_dispatch();
 
     (world, dispatch)
 }

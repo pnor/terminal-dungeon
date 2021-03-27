@@ -1,6 +1,6 @@
 use crate::entities::component::*;
 use specs::{World, WorldExt, Builder, Entity};
-use tui::style::{Color, Modifier};
+use tui::style::Color;
 
 extern crate nalgebra as na;
 use na::Vector2;
@@ -10,7 +10,7 @@ pub fn make_player(world: &mut World) -> Entity {
     let appearence = Appearance {
         icon: '@',
         foreground: Color::Cyan,
-        background: Color::White,
+        background: Color::Reset,
         modifiers: vec!()
     };
     let command_component = CommandResponse;

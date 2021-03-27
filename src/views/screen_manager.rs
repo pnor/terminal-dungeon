@@ -11,13 +11,12 @@ use std::io;
 use std::time::Duration;
 use super::Popup;
 use super::Screen;
-use tui::Frame as TuiFrame;
+use super::Frame;
 use tui::Terminal as TuiTerminal;
 use tui::backend::CrosstermBackend;
 
 type Result<T> = std::result::Result<T, ScreenManagerError>;
 type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
-type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;
 
 pub type BoxedCallback = Box<dyn FnMut(&mut ScreenManager)>;
 
@@ -55,7 +54,7 @@ impl ScreenManager {
             screens: Vec::new(),
             popups: Vec::new(),
             input_manager: InputManager::new(source, tick_rate, tick_timeout),
-            terminal: terminal,
+            terminal,
             callback_queue: VecDeque::<BoxedCallback>::new(),
             should_quit: false
         };
@@ -65,7 +64,7 @@ impl ScreenManager {
 
     /// Creates terminal using Crossterm Backend for drawing
     fn setup_terminal() -> Result<Terminal> {
-        let mut stdout = io::stdout();
+        let stdout = io::stdout();
 
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
@@ -262,8 +261,7 @@ impl From<InputManagerError> for ScreenManagerError {
 #[cfg(test)]
 mod test {
     use ntest::timeout;
-    use crate::utility::test_util::crossterm_key;
-    use std::error::Error;
+    use crate::utility::test_util::{crossterm_key, TestResult};
     use std::sync::mpsc;
     use std::rc::Rc;
     use crate::game::Command;
@@ -271,8 +269,6 @@ mod test {
     use super::*;
 
     static DUMMY_TICK: GameTick = GameTick::Tick(Duration::from_secs(1));
-
-    type TestResult = std::result::Result<(), Box<dyn Error>>;
 
     /// Testing Screen that quits after a set amount of renders
     struct TestScreen {
@@ -344,7 +340,7 @@ mod test {
             }
         }
 
-        fn render(&mut self, frame: &mut Frame, tick: GameTick) {
+        fn render(&mut self, _: &mut Frame, tick: GameTick) {
             self.sx.send(tick).unwrap();
             self.render_counter += 1;
 

@@ -1,7 +1,6 @@
-use tui::Frame as TuiFrame;
-use tui::Terminal as TuiTerminal;
-use tui::backend::CrosstermBackend;
 use std::io::Stdout;
+use tui::backend::CrosstermBackend;
+use tui::Frame as TuiFrame;
 
 pub mod screens;
 
@@ -13,6 +12,4 @@ pub use screen::Screen;
 pub use popup::Popup;
 pub use screen_manager::ScreenManager;
 
-// TODO move this into screen manager (and change impl)
-type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
 type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;

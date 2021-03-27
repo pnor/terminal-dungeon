@@ -1,9 +1,10 @@
+use std::io::{Error, ErrorKind};
 use std::collections::VecDeque;
 use std::time::Duration;
 use crossterm::event::{self, Event};
-use crossterm::ErrorKind;
+use crossterm::ErrorKind as CrosstermErrorKind;
 
-type Result<T> = std::result::Result<T, ErrorKind>;
+type Result<T> = std::result::Result<T, CrosstermErrorKind>;
 
 /// Abstraction of the source used for interacting with input events
 pub trait Source {
@@ -53,12 +54,12 @@ impl FakeSource {
 impl Source for FakeSource {
 
 
-    fn has_event(&self, timeout: Duration) -> bool {
+    fn has_event(&self, _: Duration) -> bool {
         !self.events.is_empty()
     }
 
     fn read(&mut self) -> Result<Event> {
-        let io_error = ErrorKind::IoError(std::io::Error::new(std::io::ErrorKind::Other, "Error in FakeSource!"));
+        let io_error = CrosstermErrorKind::IoError(Error::new(ErrorKind::Other, "Error in FakeSource!"));
         self.events.pop_front().ok_or(io_error)
     }
 

@@ -1,4 +1,4 @@
-use tui::style::{Color, Modifier};
+use tui::style::Color;
 use specs::{System, ReadStorage, Read, Write, Join};
 
 use crate::entities::component::{Position, Appearance, Camera};
