@@ -9,7 +9,7 @@ use crate::game::Command;
 use crate::game::GameTick;
 use crate::views::{Terminal, Frame};
 use crate::views::Screen;
-use crate::views::ScreenManagerCallback;
+use crate::views::screen_manager::BoxedCallback;
 
 use std::collections::VecDeque;
 
@@ -26,7 +26,7 @@ use crate::utility::text_canvas::{TextCanvas, CanvasSymbol};
 pub struct GameScreen<'a> {
     world: World,
     dispatcher: Dispatcher<'a, 'a>,
-    callbacks: VecDeque<Box<ScreenManagerCallback>>,
+    callbacks: VecDeque<BoxedCallback>,
 }
 
 impl Screen for GameScreen<'_> {
@@ -60,11 +60,11 @@ impl Screen for GameScreen<'_> {
     fn tear_down(&mut self) {
     }
 
-    fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>) {
+    fn add_screen_manager_callback(&mut self, callback: BoxedCallback) {
         self.callbacks.push_front(callback)
     }
 
-    fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>> {
+    fn get_screen_manager_callbacks(&mut self) -> VecDeque<BoxedCallback> {
         self.callbacks.drain(0..).collect()
     }
 
@@ -110,7 +110,7 @@ fn add_resources(world: &mut World) {
 }
 
 fn initialize_map() -> Map {
-    map::test_room()
+    map::test_big_room()
 }
 
 fn make_player(world: &mut World) {

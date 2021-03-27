@@ -99,3 +99,17 @@ pub fn test_room() -> Map {
 
     Map { tiles }
 }
+
+pub fn test_big_room() -> Map {
+    let mut tiles = vec![vec![Tile::Blank; 42]; 42];
+
+    // Large blank room, with walls places to give feeling of motion
+    for i in (0..42).step_by(5) {
+        for j in (0..42).step_by(5) {
+            tiles[i][j] = Tile::Wall;
+
+        }
+    }
+
+    Map { tiles }
+}

@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use crate::game::GameTick;
+use super::screen_manager::BoxedCallback;
 use std::io::Stdout;
-use super::ScreenManagerCallback;
 use tui::Frame;
 use tui::backend::CrosstermBackend;
 
@@ -18,9 +18,9 @@ pub trait Screen {
     fn tear_down(&mut self) {}
 
     /// Add a `ScreenManager` function to be called after next loop
-    fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>);
+    fn add_screen_manager_callback(&mut self, callback: BoxedCallback);
 
     /// Get all queued `ScreenManager` functions to be called
-    fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>>;
+    fn get_screen_manager_callbacks(&mut self) -> VecDeque<BoxedCallback>;
 
 }

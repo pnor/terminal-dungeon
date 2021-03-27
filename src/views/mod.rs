@@ -13,6 +13,6 @@ pub use screen::Screen;
 pub use popup::Popup;
 pub use screen_manager::ScreenManager;
 
-pub type ScreenManagerCallback = dyn FnMut(&mut screen_manager::ScreenManager);
+// TODO move this into screen manager (and change impl)
 type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
 type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;

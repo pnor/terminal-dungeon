@@ -1,22 +1,25 @@
-use tui::backend::CrosstermBackend;
-use std::error::Error;
-use std::collections::VecDeque;
 use crate::game::GameTick;
 use crate::game::input_manager::InputManager;
 use crate::game::input_manager::InputManagerError;
 use crate::game::source::{Source, FakeSource, EventSource};
-use crossterm::event::{EnableMouseCapture, Event};
-use std::io::{Stdout, Write};
+use crossterm::event::Event;
+use std::collections::VecDeque;
+use std::error::Error;
+use std::fmt;
+use std::io::Stdout;
 use std::io;
 use std::time::Duration;
-use std::fmt;
 use super::Popup;
 use super::Screen;
-use super::ScreenManagerCallback;
-use super::{Terminal, Frame};
+use tui::Frame as TuiFrame;
+use tui::Terminal as TuiTerminal;
+use tui::backend::CrosstermBackend;
 
 type Result<T> = std::result::Result<T, ScreenManagerError>;
-type Callback = Box<ScreenManagerCallback>;
+type Terminal = TuiTerminal<CrosstermBackend<Stdout>>;
+type Frame<'a> = TuiFrame<'a, CrosstermBackend<Stdout>>;
+
+pub type BoxedCallback = Box<dyn FnMut(&mut ScreenManager)>;
 
 /// Manages screens and popups in the game, and controls which views get inputs
 /// To properly draw, should enable raw mode on terminal before use (and clear screen)
@@ -25,16 +28,18 @@ pub struct ScreenManager {
     popups: Vec<Box<dyn Popup>>,
     input_manager: InputManager,
     terminal: Terminal,
-    callback_queue: VecDeque<Callback>,
+    callback_queue: VecDeque<BoxedCallback>,
     pub should_quit: bool,
 }
 
 impl ScreenManager {
 
+    /// Creates a new `ScreenManager` that gets input from `stdin`
     pub fn new() -> Result<ScreenManager> {
         ScreenManager::init(EventSource::new())
     }
 
+    /// Creates a new `ScreenMananger` that uses a `FakeSource` to get input
     pub fn debug_new(events: Vec<Event>) -> Result<ScreenManager> {
         ScreenManager::init(FakeSource::new(events))
     }
@@ -51,7 +56,7 @@ impl ScreenManager {
             popups: Vec::new(),
             input_manager: InputManager::new(source, tick_rate, tick_timeout),
             terminal: terminal,
-            callback_queue: VecDeque::<Callback>::new(),
+            callback_queue: VecDeque::<BoxedCallback>::new(),
             should_quit: false
         };
 
@@ -96,7 +101,7 @@ impl ScreenManager {
     fn handle_callbacks(&mut self) {
         self.update_callback_queue();
 
-        let callbacks: Vec<Box<ScreenManagerCallback>> = self.callback_queue.drain(0..).collect();
+        let callbacks: Vec<BoxedCallback> = self.callback_queue.drain(0..).collect();
         for mut callback in callbacks {
             callback(self);
         }
@@ -117,8 +122,8 @@ impl ScreenManager {
     }
 
     /// Push a new `Screen` to the top of the Screen stack
-    pub fn push_screen(&mut self, screen: Box<dyn Screen>) {
-        self.screens.push(screen);
+    pub fn push_screen(&mut self, screen: impl Screen + 'static) {
+        self.screens.push(Box::new(screen));
     }
 
     /// Pops a `Screen` from the Screen stack
@@ -127,8 +132,8 @@ impl ScreenManager {
     }
 
     /// Push a new `Popup` to the top of the Popup stack
-    pub fn push_popup(&mut self, popup: Box<dyn Popup>) {
-        self.popups.push(popup);
+    pub fn push_popup(&mut self, popup: impl Popup + 'static) {
+        self.popups.push(Box::new(popup));
     }
 
     /// Pops a `Popup` from the Popup stack
@@ -273,7 +278,7 @@ mod test {
     struct TestScreen {
         sx: mpsc::Sender<GameTick>,
         pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
-        callbacks: VecDeque<Box<ScreenManagerCallback>>,
+        callbacks: VecDeque<BoxedCallback>,
         pub render_counter: i32,
     }
 
@@ -286,7 +291,7 @@ mod test {
             TestScreen {
                 sx,
                 rx_rc,
-                callbacks: VecDeque::<Callback>::new(),
+                callbacks: VecDeque::<BoxedCallback>::new(),
                 render_counter: 0,
             }
         }
@@ -307,11 +312,11 @@ mod test {
             self.sx.send(DUMMY_TICK).unwrap();
         }
 
-        fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>) {
+        fn add_screen_manager_callback(&mut self, callback: BoxedCallback) {
             self.callbacks.push_front(callback)
         }
 
-        fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>> {
+        fn get_screen_manager_callbacks(&mut self) -> VecDeque<BoxedCallback> {
             self.callbacks.drain(0..).collect()
         }
 
@@ -321,7 +326,7 @@ mod test {
     struct TestPopup {
         sx: mpsc::Sender<GameTick>,
         pub rx_rc: Rc<mpsc::Receiver<GameTick>>,
-        callbacks: VecDeque<Box<ScreenManagerCallback>>,
+        callbacks: VecDeque<BoxedCallback>,
         pub render_counter: i32,
     }
 
@@ -334,7 +339,7 @@ mod test {
             TestPopup {
                 sx,
                 rx_rc,
-                callbacks: VecDeque::<Callback>::new(),
+                callbacks: VecDeque::<BoxedCallback>::new(),
                 render_counter: 0
             }
         }
@@ -359,11 +364,11 @@ mod test {
             self.sx.send(DUMMY_TICK).unwrap();
         }
 
-        fn add_screen_manager_callback(&mut self, callback: Box<ScreenManagerCallback>) {
+        fn add_screen_manager_callback(&mut self, callback: BoxedCallback) {
             self.callbacks.push_front(callback)
         }
 
-        fn get_screen_manager_callbacks(&mut self) -> VecDeque<Box<ScreenManagerCallback>> {
+        fn get_screen_manager_callbacks(&mut self) -> VecDeque<BoxedCallback> {
             self.callbacks.drain(0..).collect()
         }
 
@@ -402,7 +407,7 @@ mod test {
         let mut screen_manager = ScreenManager::new()?;
 
         let test_screen = TestScreen::new();
-        screen_manager.push_screen(Box::new(test_screen));
+        screen_manager.push_screen(test_screen);
 
         assert_eq!(screen_manager.screens.len(), 1);
 
@@ -418,8 +423,8 @@ mod test {
 
         let screen_1_rx_rc = test_screen_1.rx_rc.clone();
 
-        screen_manager.push_screen(Box::new(test_screen_2));
-        screen_manager.push_screen(Box::new(test_screen_1));
+        screen_manager.push_screen(test_screen_2);
+        screen_manager.push_screen(test_screen_1);
 
         let mut popped = screen_manager.pop_screen().unwrap();
 
@@ -438,7 +443,7 @@ mod test {
         let mut screen_manager = ScreenManager::new()?;
 
         let test_popup = TestPopup::new();
-        screen_manager.push_popup(Box::new(test_popup));
+        screen_manager.push_popup(test_popup);
 
         assert_eq!(screen_manager.popups.len(), 1);
 
@@ -454,8 +459,8 @@ mod test {
 
         let popup_1_rx_rc = test_popup_1.rx_rc.clone();
 
-        screen_manager.push_popup(Box::new(test_popup_2));
-        screen_manager.push_popup(Box::new(test_popup_1));
+        screen_manager.push_popup(test_popup_2);
+        screen_manager.push_popup(test_popup_1);
 
         let mut popped = screen_manager.pop_popup().unwrap();
 
@@ -481,8 +486,8 @@ mod test {
         {
             let mut screen_manager = ScreenManager::new()?;
 
-            screen_manager.push_screen(Box::new(test_screen));
-            screen_manager.push_popup(Box::new(test_popup));
+            screen_manager.push_screen(test_screen);
+            screen_manager.push_popup(test_popup);
         }
 
         // Screen manager is dropped
@@ -504,8 +509,8 @@ mod test {
         let bottom_rx = screen_bottom.rx_rc.clone();
 
         // add it to manager
-        screen_manager.push_screen(Box::new(screen_bottom));
-        screen_manager.push_screen(Box::new(screen_top));
+        screen_manager.push_screen(screen_bottom);
+        screen_manager.push_screen(screen_top);
 
         // create the test tick in question
         let test_tick = GameTick::Command(Duration::from_millis(100), Command::Up);
@@ -541,11 +546,11 @@ mod test {
         let popup_bottom_rx = popup_bottom.rx_rc.clone();
 
         // add it to manager
-        screen_manager.push_popup(Box::new(popup_bottom));
-        screen_manager.push_popup(Box::new(popup_top));
+        screen_manager.push_popup(popup_bottom);
+        screen_manager.push_popup(popup_top);
 
-        screen_manager.push_screen(Box::new(screen_bottom));
-        screen_manager.push_screen(Box::new(screen_top));
+        screen_manager.push_screen(screen_bottom);
+        screen_manager.push_screen(screen_top);
 
         // create the test tick in question
         let test_tick = GameTick::Command(Duration::from_millis(100), Command::Up);
@@ -580,7 +585,7 @@ mod test {
 
         let screen_rx = screen.rx_rc.clone();
 
-        screen_manager.push_screen(Box::new(screen));
+        screen_manager.push_screen(screen);
 
         screen_manager.start_main_loop().unwrap();
 
@@ -606,7 +611,7 @@ mod test {
 
         let popup_rx = popup.rx_rc.clone();
 
-        screen_manager.push_popup(Box::new(popup));
+        screen_manager.push_popup(popup);
 
         screen_manager.start_main_loop().unwrap();
 
@@ -634,8 +639,8 @@ mod test {
         let screen_rx = screen.rx_rc.clone();
         let popup_rx = popup.rx_rc.clone();
 
-        screen_manager.push_screen(Box::new(screen));
-        screen_manager.push_popup(Box::new(popup));
+        screen_manager.push_screen(screen);
+        screen_manager.push_popup(popup);
 
         screen_manager.start_main_loop().unwrap();
 

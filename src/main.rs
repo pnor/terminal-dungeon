@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let game_screen = GameScreen::new();
 
-    screen_manager.push_screen(Box::new(game_screen));
+    screen_manager.push_screen(game_screen);
 
     screen_manager.start_main_loop()?;
 
