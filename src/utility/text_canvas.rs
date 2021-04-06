@@ -21,6 +21,11 @@ impl Default for TextCanvas {
 
 impl TextCanvas {
 
+    /// Returns `TextCanvas` with default symbols of size `width` x `height`
+    pub fn with_size(width: usize, height: usize) -> Self {
+        TextCanvas { symbols: vec![vec![CanvasSymbol::default(); height]; width] }
+    }
+
     /// Returns `TextCanvas` with default symbols of the same dimensions as the map
     pub fn for_map(map: &Map) -> Self {
         let (map_width, map_height) = map.dimensions();

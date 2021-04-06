@@ -21,3 +21,11 @@ pub fn as_usize(num: i32) -> usize {
         }
     }
 }
+
+/// Converts `num` to `usize`, clamping it between 0 and `u16;:MAX`
+pub fn u16_to_usize(num: u16) -> usize {
+    match num.try_into() {
+        Ok(result) => result,
+        Err(_) => u16::MAX.into()
+    }
+}

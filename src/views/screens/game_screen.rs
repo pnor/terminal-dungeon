@@ -1,5 +1,6 @@
 use super::Frame;
 use crate::views::ScreenManager;
+use crate::utility::conversions;
 use tui::layout::Rect;
 use tui::widgets::Block;
 use tui::widgets::Paragraph;
@@ -104,12 +105,25 @@ fn register_components(world: &mut World) {
 fn add_resources(world: &mut World) {
     let map = initialize_map();
 
-    let canvas = TextCanvas::for_map(&map);
+    let canvas = create_canvas(&map);
     world.insert(canvas);
 
     world.insert(map);
 
     world.insert(GameTick::default());
+}
+
+fn create_canvas(map: &Map) -> TextCanvas {
+    let (terminal_width, terminal_height) = match crossterm::terminal::size() {
+        Ok((width, height)) => (conversions::u16_to_usize(width), conversions::u16_to_usize(height)),
+        _ => (0, 0)
+    };
+    let (map_width, map_height) = map.dimensions();
+
+    let canvas_width = std::cmp::min(terminal_width, map_width);
+    let canvas_height = std::cmp::min(terminal_height, map_height);
+
+    TextCanvas::with_size(canvas_width, canvas_height)
 }
 
 fn initialize_map() -> Map {
