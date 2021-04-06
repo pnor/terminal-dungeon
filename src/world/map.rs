@@ -15,8 +15,8 @@ impl Clone for Tile {
     }
 }
 
-#[derive(Default)]
 /// Map of the game world
+#[derive(Default)]
 pub struct Map {
     tiles: Vec<Vec<Tile>>
 }
@@ -54,6 +54,20 @@ impl Map {
         }
     }
 
+    /// Returns `true` if (x, y) is able to be moved onto (has no collision).
+    /// Spaces OOB are considered open
+    ///
+    /// Example: `Blank` returns `true` as you can move on it, but `Wall` returns `false`
+    pub fn is_open(&self, x: i32, y: i32) -> bool {
+        if !self.in_bounds(x, y) {
+            return true
+        }
+
+        match self.tiles[conversions::as_usize(x)][conversions::as_usize(y)] {
+            Tile::Blank => true,
+            _ => false
+        }
+    }
 }
 
 pub fn test_room() -> Map {

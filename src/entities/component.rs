@@ -49,3 +49,8 @@ pub struct Camera;
 #[derive(Component)]
 #[storage(HashMapStorage)]
 pub struct CommandResponse;
+
+/// Entities that can collide with Walls or other entities with `Collision`
+#[derive(Component)]
+#[storage(HashMapStorage)]
+pub struct Collision;

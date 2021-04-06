@@ -96,6 +96,7 @@ fn register_components(world: &mut World) {
     world.register::<CommandResponse>();
     world.register::<Follow>();
     world.register::<Position>();
+    world.register::<Collision>();
 }
 
 fn add_resources(world: &mut World) {

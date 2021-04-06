@@ -30,3 +30,19 @@ pub fn make_camera(target: Entity, world: &mut World) -> Entity {
         .with(Position { vec2: Vector2::new(0, 0) })
         .build()
 }
+
+pub fn make_dummy(world: &mut World) -> Entity {
+    let starting_position = Position { vec2: Vector2::new(7, 7) };
+    let appearence = Appearance {
+        icon: '@',
+        foreground: Color::Green,
+        background: Color::Reset,
+        modifiers: vec!()
+    };
+    let collision_component = Collision;
+    world.create_entity()
+        .with(starting_position)
+        .with(appearence)
+        .with(collision_component)
+        .build()
+}
