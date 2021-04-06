@@ -37,6 +37,8 @@ impl Screen for GameScreen<'_> {
         add_resources(&mut world);
         make_player(&mut world);
 
+        factory::make_dummy(&mut world);
+
         GameScreen {
             world,
             dispatcher,
