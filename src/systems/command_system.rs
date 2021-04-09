@@ -46,10 +46,10 @@ fn get_target_position(position: &mut Position, command: &Command) -> Vector2<i3
     let mut new_position = (*position).vec2;
 
     match *command {
-        Command::Up => new_position[0] -= 1,
-        Command::Down => new_position[0] += 1,
-        Command::Left => new_position[1] -= 1,
-        Command::Right => new_position[1] += 1,
+        Command::Up => new_position[1] -= 1,
+        Command::Down => new_position[1] += 1,
+        Command::Left => new_position[0] -= 1,
+        Command::Right => new_position[0] += 1,
         _ => ()
     };
 
