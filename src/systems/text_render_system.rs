@@ -128,7 +128,7 @@ fn get_canvas_symbol_for_appearence(appearence: &Appearance) -> CanvasSymbol {
     }
 }
 
-/// Converts (x, y) in world space to (x, y) in the text_canvas_space.
+/// Converts (x, y) in world space to (x, y) in the text_canvas space.
 /// Returns optional (x, y) tuple in text_canvas_space space, where (0, 0) is the top-left of the canvas.
 /// Is None if the world space coordinate is not on the canvas (negative or OOB)
 ///

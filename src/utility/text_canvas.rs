@@ -37,11 +37,11 @@ impl TextCanvas {
         let mut map_lines: Vec<Spans> = vec!();
         let (width, height) = self.dimensions();
 
-        for i in 0..width {
+        for i in 0..height {
             let mut line: Vec<Span> = vec!();
 
-            for j in 0..height {
-                let symbol = &self.symbols[i][j];
+            for j in 0..width {
+                let symbol = &self.symbols[j][i];
                 line.push(symbol.span());
             }
             line.push(Span::raw("\n"));

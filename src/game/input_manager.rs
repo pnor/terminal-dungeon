@@ -325,8 +325,6 @@ mod test {
         let second_is_second = compare(&no_ticks[1], &key_event('2'));
         let third_is_third = compare(&no_ticks[2], &key_event('3'));
 
-        println!("no_ticks: {:?}", no_ticks);
-
         assert!(first_is_first && second_is_second && third_is_third);
 
         Ok(())
