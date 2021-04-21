@@ -26,7 +26,7 @@ pub fn color_to_rgb(color: Color) -> Color {
         Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
         Color::Reset => todo!(),
         Color::Indexed(_) => {
-                todo!()
+            todo!()
         }
     }
 }
@@ -61,5 +61,4 @@ mod tests {
         let white = Color::White;
         assert_eq!(color_to_rgb(white), Color::Rgb(254, 255, 255));
     }
-
 }

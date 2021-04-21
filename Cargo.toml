@@ -10,7 +10,9 @@ edition = "2018"
 crossterm = "0.18"
 nalgebra = "0.24.0"
 specs = { version = "0.16.1", features = ["specs-derive"] }
-tui = { version = "0.14", default-features = false, features = ['crossterm'] }
+tui = { version = "0.14", default-features = false, features = ["crossterm"] }
+splines = { version = "*", features = ["impl-nalgebra"] }
+float-cmp = "*"
 
 [dev-dependencies]
 ntest = "*"

@@ -167,7 +167,7 @@ mod test {
 
     }
 
-    /// Convenienve method for creating the InputManager
+    /// Convenience method for creating the InputManager
     fn make_input_manager(events: Vec<CEvent>) -> InputManager {
         InputManager::new(FakeSource::new(events), Duration::from_millis(16), Duration::from_secs(1))
     }
