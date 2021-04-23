@@ -21,7 +21,6 @@ use std::error::Error;
 
 use std::io::{self, Write};
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     enable_raw_mode()?;
     setup_ui()?;

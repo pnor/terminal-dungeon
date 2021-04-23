@@ -1,57 +1,15 @@
-use std::ops::{Add, Mul, Sub};
 use float_cmp::approx_eq;
 use splines::{Interpolation, Key, Spline};
-use splines::impl_Interpolate;
 use std::error::Error;
 use std::fmt;
 
 type Result<T> = std::result::Result<T, IconSplineConstructorError>;
 
-struct F32Wrapper(f32);
-
-#[derive(Clone, Copy)]
-struct CharWrapper(char);
-
-impl Add for CharWrapper {
-    type Output = CharWrapper;
-
-    fn add(self, other: Self) -> Self {
-        let self_num = self.0 as u8;
-        let other_num = other.0 as u8;
-        let result = self_num.saturating_add(other_num);
-        Self { 0: result as char }
-    }
-}
-
-impl Sub for CharWrapper {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self {
-        let self_num = self.0 as u8;
-        let other_num = other.0 as u8;
-        let result = self_num.saturating_sub(other_num);
-        Self { 0: result as char }
-    }
-}
-
-impl Mul for CharWrapper {
-    type Output = Self;
-
-    fn mul(self, other: Self) -> Self {
-        let self_num = self.0 as u8;
-        let other_num = other.0 as u8;
-        let result = self_num.saturating_mul(other_num);
-        Self { 0: result as char }
-    }
-}
-
-impl_Interpolate!(f32, CharWrapper, std::f32::consts::PI);
-
 /// Spline specifically for setting icons in a stepwise manner
 ///
-/// Uses `u8` under the hood to interpolate
+/// Uses `f32` under the hood to interpolate, then casts result to `u8`, then to `char`
 struct IconSpline {
-    spline: Spline<f32, char>,
+    spline: Spline<f32, f32>,
 }
 
 impl IconSpline {
@@ -61,29 +19,28 @@ impl IconSpline {
     /// Each tuple has `(amount, character)` means that starting at `amount`, it should use `character`
     fn new(mut icon_ranges: Vec<(f32, char)>) -> Result<Self> {
         icon_ranges.sort_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap());
+        let float_ranges = icon_ranges.into_iter().map(|(s, c)| (s, c as u8 as f32)).collect();
 
-        if validate_ranges(&icon_ranges) {
+        if validate_ranges(&float_ranges) {
             return Ok(IconSpline {
-                spline: create_spline(icon_ranges),
+                spline: create_spline(float_ranges),
             });
         } else {
-            return Err(IconSplineConstructorError(icon_ranges));
+            return Err(IconSplineConstructorError(float_ranges));
         }
     }
 
     fn sample(&self, point: f32) -> Option<char> {
-        // self.spline.sample(point)
-        todo!()
+        self.spline.sample(point).and_then(|p| Some(p as u8 as char))
     }
 
     fn clamped_sample(&self, point: f32) -> Option<char> {
-        // self.spline.clamped_sample(point)
-        todo!()
+        self.spline.clamped_sample(point).and_then(|p| Some(p as u8 as char))
     }
 }
 
 /// Ensures that `icon_ranges` has entries between 0..1, and has one that starts at 0
-fn validate_ranges(icon_ranges: &Vec<(f32, char)>) -> bool {
+fn validate_ranges(icon_ranges: &Vec<(f32, f32)>) -> bool {
     if icon_ranges.len() == 0 {
         return false;
     }
@@ -102,19 +59,24 @@ fn validate_ranges(icon_ranges: &Vec<(f32, char)>) -> bool {
     true
 }
 
-fn create_spline(icon_ranges: Vec<(f32, char)>) -> Spline<f32, char> {
+fn create_spline(icon_ranges: Vec<(f32, f32)>) -> Spline<f32, f32> {
     let mut keys = Vec::new();
+    let last_character = match icon_ranges.last() {
+        Some(&(_, value)) => value,
+        None => '?' as u8 as f32
+    };
 
     for (start, character) in icon_ranges {
         let key = Key::new(start, character, Interpolation::Step(1.0));
         keys.push(key);
     }
-    keys.push(Key::new(1., '?', Interpolation::default()));
+
+    keys.push(Key::new(1., last_character, Interpolation::default()));
 
     Spline::from_vec(keys)
 }
 
-struct IconSplineConstructorError(Vec<(f32, char)>);
+struct IconSplineConstructorError(Vec<(f32, f32)>);
 
 impl Error for IconSplineConstructorError {}
 
@@ -179,17 +141,18 @@ mod test {
     #[test]
     fn test_applying_spline() {
         let spline = IconSpline::new(vec![
-            (0.0 , '0'),
-            (0.1 , '1'),
-            (0.2 , '2'),
-            (0.3 , '3'),
-            (0.4 , '4'),
-            (0.5 , '5'),
-            (0.6 , '6'),
-            (0.7 , '7'),
-            (0.8 , '8'),
-            (0.9 , '9'),
-        ]).expect("Test uses valid spline");
+            (0.0, '0'),
+            (0.1, '1'),
+            (0.2, '2'),
+            (0.3, '3'),
+            (0.4, '4'),
+            (0.5, '5'),
+            (0.6, '6'),
+            (0.7, '7'),
+            (0.8, '8'),
+            (0.9, '9'),
+        ])
+        .expect("Test uses valid spline");
 
         assert_eq!(spline.sample(0.00), Some('0'));
         assert_eq!(spline.sample(0.05), Some('0'));
@@ -211,22 +174,23 @@ mod test {
         assert_eq!(spline.sample(0.85), Some('8'));
         assert_eq!(spline.sample(0.90), Some('9'));
         assert_eq!(spline.sample(0.95), Some('9'));
-        assert_eq!(spline.sample(1.00), Some('9'));
+        assert_eq!(spline.sample(1.00), None);
     }
 
     fn test_applying_clamped_splines() {
         let spline = IconSpline::new(vec![
-            (0.0 , '0'),
-            (0.1 , '1'),
-            (0.2 , '2'),
-            (0.3 , '3'),
-            (0.4 , '4'),
-            (0.5 , '5'),
-            (0.6 , '6'),
-            (0.7 , '7'),
-            (0.8 , '8'),
-            (0.9 , '9'),
-        ]).expect("Test uses valid spline");
+            (0.0, '0'),
+            (0.1, '1'),
+            (0.2, '2'),
+            (0.3, '3'),
+            (0.4, '4'),
+            (0.5, '5'),
+            (0.6, '6'),
+            (0.7, '7'),
+            (0.8, '8'),
+            (0.9, '9'),
+        ])
+        .expect("Test uses valid spline");
 
         assert_eq!(spline.clamped_sample(-3.0), Some('0'));
         assert_eq!(spline.clamped_sample(-2.0), Some('0'));
